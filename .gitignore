@@ -1,8 +1,6 @@
 # Binaries
 main
 main.exe
-backend
-backend.exe
 
 # Dependency directories
 vendor/
