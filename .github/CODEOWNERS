@@ -1,0 +1,31 @@
+# Code Owners
+
+This file defines the code owners for different parts of the Vortyx project.
+
+## Default Owners
+* @default-owner
+
+## Frontend
+/frontend/ @frontend-team @default-owner
+
+## Backend
+/backend/ @backend-team @default-owner
+
+## Protobuf
+/proto/ @backend-team @default-owner
+
+## GitHub Actions
+/.github/workflows/ @devops-team @default-owner
+
+## Documentation
+/docs/ @tech-writers @default-owner
+
+## Scripts
+/scripts/ @devops-team @default-owner
+
+## Dependencies
+# Any changes to package.json, go.mod, or lock files should be reviewed
+**/package.json @dependencies-team
+**/package-lock.json @dependencies-team
+**/go.mod @dependencies-team
+**/go.sum @dependencies-team

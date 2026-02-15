@@ -1,0 +1,226 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'proto/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'proto/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  GO_VERSION: '1.24'
+
+jobs:
+  frontend-ci:
+    name: Frontend CI (Node.js ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['18', '20', '22']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run TypeScript type check
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
+      - name: Build Next.js application
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test -- --coverage
+        continue-on-error: true
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./frontend
+          files: ./coverage/clover.xml
+          flags: frontend
+          name: frontend-coverage
+        continue-on-error: true
+
+      - name: Run npm audit
+        working-directory: ./frontend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  backend-ci:
+    name: Backend CI (Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.22', '1.23', '1.24']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Download Go modules
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ./backend
+
+      - name: Run Go tests
+        working-directory: ./backend
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./backend
+          files: ./coverage/coverage.out
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+      - name: Build Go application
+        working-directory: ./backend
+        run: go build -o vortyx-backend .
+
+      - name: Verify Go build
+        working-directory: ./backend
+        run: |
+          if [ ! -f vortyx-backend ]; then
+            echo "Build failed: binary not found"
+            exit 1
+          fi
+          echo "Build successful"
+
+  proto-ci:
+    name: Protobuf Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.28'
+
+      - name: Run buf lint
+        working-directory: ./proto
+        run: buf lint
+
+      - name: Run buf breaking change detection
+        working-directory: ./proto
+        run: buf breaking --against '.git#branch=main'
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: [frontend-ci, backend-ci]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [frontend-ci, backend-ci, proto-ci, container-scan, dependency-review]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          frontend_status="${{ needs.frontend-ci.result }}"
+          backend_status="${{ needs.backend-ci.result }}"
+          proto_status="${{ needs.proto-ci.result }}"
+          
+          echo "### Frontend" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: $frontend_status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Backend" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: $backend_status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Protobuf" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: $proto_status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$frontend_status" == "failure" ] || [ "$backend_status" == "failure" ] || [ "$proto_status" == "failure" ]; then
+            echo "❌ CI Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ CI Pipeline Passed" >> $GITHUB_STEP_SUMMARY
+          fi

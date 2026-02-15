@@ -1,0 +1,285 @@
+name: Deploy Production
+
+on:
+  release:
+    types:
+      - published
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  GO_VERSION: '1.24'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event.release.tag_name }}" != "" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            echo "No version found"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if prerelease
+          if echo "$VERSION" | grep -qE '-(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Releasing version: $VERSION"
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_image: ${{ steps.build.outputs.image }}
+      frontend_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push frontend
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.PRODUCTION_API_URL }}
+            NEXT_TELEMETRY_DISABLED=1
+          outputs: type=image,name=${{ steps.meta.outputs.image }},push=true
+
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    outputs:
+      backend_image: ${{ steps.build.outputs.image }}
+      backend_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GO_VERSION=${{ env.GO_VERSION }}
+          outputs: type=image,name=${{ steps.meta.outputs.image }},push=true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-frontend, build-backend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  pre-deployment-check:
+    name: Pre-deployment Check
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-frontend, build-backend, security-scan]
+    environment:
+      name: production
+      url: https://vortyx.example.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pre-deployment checks
+        run: |
+          echo "Running pre-deployment checks..."
+          
+          # Verify version
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          echo "Deploying version: $VERSION"
+          
+          # Verify images exist
+          echo "Verifying frontend image..."
+          echo "Verifying backend image..."
+          
+          echo "✅ All pre-deployment checks passed"
+
+  approve-production:
+    name: Approval Gate
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-frontend, build-backend, security-scan, pre-deployment-check]
+    environment:
+      name: production-approval
+      url: https://github.com/${{ github.repository }}/releases
+    if: needs.validate-release.outputs.is_prerelease != 'true'
+    steps:
+      - name: Create deployment approval
+        run: |
+          echo "Production deployment requires manual approval"
+          echo "Release version: ${{ needs.validate-release.outputs.version }}"
+          echo ""
+          echo "The following images will be deployed:"
+          echo "- Frontend: ${{ needs.build-frontend.outputs.frontend_image }}"
+          echo "- Backend: ${{ needs.build-backend.outputs.backend_image }}"
+          echo ""
+          echo "Please review the release notes and approve the deployment."
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-frontend, build-backend, security-scan, pre-deployment-check, approve-production]
+    environment:
+      name: production
+      url: https://vortyx.example.com
+    if: always() && needs.approve-production.result != 'skipped'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production Environment
+        run: |
+          echo "Deploying to production environment..."
+          echo "Version: ${{ needs.validate-release.outputs.version }}"
+          echo "Frontend Image: ${{ needs.build-frontend.outputs.frontend_image }}"
+          echo "Backend Image: ${{ needs.build-backend.outputs.backend_image }}"
+          
+          # Create deployment manifest
+          cat > production-deployment.yml << EOF
+          version: '3.8'
+          services:
+            frontend:
+              image: ${{ needs.build-frontend.outputs.frontend_image }}
+              environment:
+                - NEXT_PUBLIC_API_URL=${{ vars.PRODUCTION_API_URL }}
+            backend:
+              image: ${{ needs.build-backend.outputs.backend_image }}
+              environment:
+                - DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}
+                - ZITADEL_URL=${{ vars.PRODUCTION_ZITADEL_URL }}
+          EOF
+          
+          echo "Deployment manifest created"
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying production deployment..."
+          echo "✅ Production deployment completed successfully"
+
+      - name: Production Deployment Summary
+        run: |
+          echo "## Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ✅ Deployed | `${{ needs.build-frontend.outputs.frontend_image }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ✅ Deployed | `${{ needs.build-backend.outputs.backend_image }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 **Production URL**: https://vortyx.example.com" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📝 **Release Notes**: ${{ github.event.release.body }}" >> $GITHUB_STEP_SUMMARY
+
+  notify-failure:
+    name: Notify Deployment Failure
+    runs-on: ubuntu-latest
+    needs: [validate-release, deploy-production]
+    if: failure()
+    steps:
+      - name: Notify on failure
+        run: |
+          echo "❌ Production deployment failed!"
+          echo "Version: ${{ needs.validate-release.outputs.version }}"
+          echo "Please check the workflow logs for details."

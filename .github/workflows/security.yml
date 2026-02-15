@@ -1,0 +1,189 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '**/go.sum'
+      - '**/go.mod'
+      - 'Dockerfile'
+      - '.github/workflows/security.yml'
+
+concurrency:
+  group: security-scan
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  GO_VERSION: '1.24'
+
+jobs:
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run npm audit on Frontend
+        if: env.FRONTEND_DIR
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: audit
+          args: --severity-threshold=high
+        continue-on-error: true
+
+      - name: Run Go vulnerability scan
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          package: ./backend/...
+        continue-on-error: true
+
+  code-scanning:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: |
+            go
+            javascript
+            typescript
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:"
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_COMMENTS: false
+        continue-on-error: true
+
+      - name: Scan for sensitive data
+        run: |
+          echo "Running additional secret scanning..."
+          # Add custom secret detection rules here if needed
+
+  container-scanning:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend container
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          load: true
+          tags: vortyx-frontend:scan
+
+      - name: Run Trivy on frontend container
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'vortyx-frontend:scan'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+
+      - name: Build backend container
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          load: true
+          tags: vortyx-backend:scan
+
+      - name: Run Trivy on backend container
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'vortyx-backend:scan'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+
+      - name: Upload results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-frontend.sarif'
+
+      - name: Upload backend results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-backend.sarif'
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-scanning, secret-scanning, container-scanning, dependency-review]
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          dep_status="${{ needs.dependency-scan.result }}"
+          code_status="${{ needs.code-scanning.result }}"
+          secret_status="${{ needs.secret-scanning.result }}"
+          container_status="${{ needs.container-scanning.result }}"
+          dep_review_status="${{ needs.dependency-review.result }}"
+          
+          echo "### Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | $dep_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Analysis | $code_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | $secret_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Scan | $container_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Review | $dep_review_status |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$dep_status" == "failure" ] || [ "$code_status" == "failure" ] || [ "$secret_status" == "failure" ] || [ "$container_status" == "failure" ]; then
+            echo "⚠️ Security issues detected - Please review the findings" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All security scans passed" >> $GITHUB_STEP_SUMMARY
+          fi
