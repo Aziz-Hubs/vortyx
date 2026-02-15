@@ -1,10 +1,10 @@
 # Vortyx
 
-[![CI](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/ci.yml)
-[![Deploy Staging](https://github.com/${{ github.repository }}/actions/workflows/deploy-staging.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/deploy-staging.yml)
-[![Deploy Production](https://github.com/${{ github.repository }}/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/deploy-production.yml)
-[![Security Scan](https://github.com/${{ github.repository }}/actions/workflows/security.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/security.yml)
-[![Dependency Updates](https://github.com/${{ github.repository }}/actions/workflows/dependency-updates.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/dependency-updates.yml)
+[![CI](https://github.com/Aziz-Hubs/vortyx/actions/workflows/ci.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/ci.yml)
+[![Deploy Staging](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml)
+[![Deploy Production](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml)
+[![Security Scan](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml)
+[![Dependency Updates](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml)
 
 Vortyx is a Modern Fullstack Platform built on a decoupled architecture.
 
@@ -152,11 +152,11 @@ Required secrets and variables for GitHub Actions:
 
 ### Status Badges
 
-![CI](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)
-![Deploy Staging](https://github.com/${{ github.repository }}/actions/workflows/deploy-staging.yml/badge.svg)
-![Deploy Production](https://github.com/${{ github.repository }}/actions/workflows/deploy-production.yml/badge.svg)
-![Security Scan](https://github.com/${{ github.repository }}/actions/workflows/security.yml/badge.svg)
-![Dependency Updates](https://github.com/${{ github.repository }}/actions/workflows/dependency-updates.yml/badge.svg)
+![CI](https://github.com/Aziz-Hubs/vortyx/actions/workflows/ci.yml/badge.svg)
+![Deploy Staging](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml/badge.svg)
+![Deploy Production](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml/badge.svg)
+![Security Scan](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml/badge.svg)
+![Dependency Updates](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml/badge.svg)
 
 ## Contributing
 
