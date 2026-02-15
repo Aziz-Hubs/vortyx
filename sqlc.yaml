@@ -1,180 +1,204 @@
 version: '2'
 sql:
-  - schema: backend/internal/pulse/db/schema/
-    queries: backend/internal/pulse/db/queries/
+  - schema: backend/internal/msp/pulse/db/schema/
+    queries: backend/internal/msp/pulse/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/pulse/db
+        out: backend/internal/msp/pulse/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/pilot/db/schema/
-    queries: backend/internal/pilot/db/queries/
+  - schema: backend/internal/msp/pilot/db/schema/
+    queries: backend/internal/msp/pilot/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/pilot/db
+        out: backend/internal/msp/pilot/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/nexus/db/schema/
-    queries: backend/internal/nexus/db/queries/
+  - schema: backend/internal/msp/nexus/db/schema/
+    queries: backend/internal/msp/nexus/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/nexus/db
+        out: backend/internal/msp/nexus/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/horizon/db/schema/
-    queries: backend/internal/horizon/db/queries/
+  - schema: backend/internal/msp/horizon/db/schema/
+    queries: backend/internal/msp/horizon/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/horizon/db
+        out: backend/internal/msp/horizon/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/control/db/schema/
-    queries: backend/internal/control/db/queries/
+  - schema: backend/internal/msp/control/db/schema/
+    queries: backend/internal/msp/control/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/control/db
+        out: backend/internal/msp/control/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/optic/db/schema/
-    queries: backend/internal/optic/db/queries/
+  - schema: backend/internal/msp/optic/db/schema/
+    queries: backend/internal/msp/optic/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/optic/db
+        out: backend/internal/msp/optic/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/grid/db/schema/
-    queries: backend/internal/grid/db/queries/
+  - schema: backend/internal/msp/grid/db/schema/
+    queries: backend/internal/msp/grid/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/grid/db
+        out: backend/internal/msp/grid/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/radar/db/schema/
-    queries: backend/internal/radar/db/queries/
+  - schema: backend/internal/mssp/radar/db/schema/
+    queries: backend/internal/mssp/radar/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/radar/db
+        out: backend/internal/mssp/radar/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/guard/db/schema/
-    queries: backend/internal/guard/db/queries/
+  - schema: backend/internal/mssp/guard/db/schema/
+    queries: backend/internal/mssp/guard/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/guard/db
+        out: backend/internal/mssp/guard/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/shield/db/schema/
-    queries: backend/internal/shield/db/queries/
+  - schema: backend/internal/mssp/shield/db/schema/
+    queries: backend/internal/mssp/shield/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/shield/db
+        out: backend/internal/mssp/shield/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/mind/db/schema/
-    queries: backend/internal/mind/db/queries/
+  - schema: backend/internal/mssp/mind/db/schema/
+    queries: backend/internal/mssp/mind/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/mind/db
+        out: backend/internal/mssp/mind/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/probe/db/schema/
-    queries: backend/internal/probe/db/queries/
+  - schema: backend/internal/mssp/probe/db/schema/
+    queries: backend/internal/mssp/probe/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/probe/db
+        out: backend/internal/mssp/probe/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/reflex/db/schema/
-    queries: backend/internal/reflex/db/queries/
+  - schema: backend/internal/mssp/reflex/db/schema/
+    queries: backend/internal/mssp/reflex/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/reflex/db
+        out: backend/internal/mssp/reflex/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/sonar/db/schema/
-    queries: backend/internal/sonar/db/queries/
+  - schema: backend/internal/mssp/sonar/db/schema/
+    queries: backend/internal/mssp/sonar/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/sonar/db
+        out: backend/internal/mssp/sonar/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
-  - schema: backend/internal/signal/db/schema/
-    queries: backend/internal/signal/db/queries/
+  - schema: backend/internal/mssp/signal/db/schema/
+    queries: backend/internal/mssp/signal/db/queries/
     engine: postgresql
     gen:
       go:
         package: db
-        out: backend/internal/signal/db
+        out: backend/internal/mssp/signal/db
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+  - schema: backend/internal/platform/db/schema/
+    queries: backend/internal/platform/db/queries/
+    engine: postgresql
+    gen:
+      go:
+        package: db
+        out: backend/internal/platform/db
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+  - schema: backend/internal/vort/db/schema/
+    queries: backend/internal/vort/db/queries/
+    engine: postgresql
+    gen:
+      go:
+        package: db
+        out: backend/internal/vort/db
         sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false

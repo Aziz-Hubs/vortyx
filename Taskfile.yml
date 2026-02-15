@@ -1,5 +1,8 @@
 version: '3'
 
+env:
+  GOBIN: "{{.USERWORKDIR}}/bin"
+
 tasks:
   default:
     cmds:
@@ -39,6 +42,18 @@ tasks:
     desc: Generate SQL code
     cmds:
       - sqlc generate
+
+  build:
+    desc: Build backend binary
+    dir: backend
+    cmds:
+      - go build -o ../bin/vortyx .
+
+  install:
+    desc: Install backend binary to GOBIN
+    dir: backend
+    cmds:
+      - go install .
 
   api:
     desc: Run backend (Go)

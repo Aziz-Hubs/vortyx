@@ -1,0 +1,33 @@
+package horizon
+
+import (
+	"context"
+	
+	"connectrpc.com/connect"
+	"github.com/jackc/pgx/v5/pgxpool"
+	
+	horizonv1 "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/horizon/v1"
+	"github.com/abdul/vortyx/backend/internal/msp/horizon/db"
+)
+
+type Service struct {
+	repo db.Querier
+	pool *pgxpool.Pool
+}
+
+func NewService(pool *pgxpool.Pool) *Service {
+	return &Service{
+		pool: pool,
+		repo: db.New(pool),
+	}
+}
+
+func (s *Service) GetStatus(
+	ctx context.Context,
+	req *connect.Request[horizonv1.GetStatusRequest],
+) (*connect.Response[horizonv1.GetStatusResponse], error) {
+	return connect.NewResponse(&horizonv1.GetStatusResponse{
+		Status:  "Operational",
+		Version: "v1.0.0",
+	}), nil
+}

@@ -56,7 +56,7 @@ services:
       ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
 
       # Disable Login v2 - use built-in Login v1
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: true
 
       # First instance configuration
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: false
