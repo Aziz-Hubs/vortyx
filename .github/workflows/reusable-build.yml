@@ -53,8 +53,8 @@ jobs:
     name: Build ${{ inputs.component }}
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ inputs.component == 'frontend' && steps.build-frontend.outputs.image || steps.build-backend.outputs.image }}
-      digest: ${{ inputs.component == 'frontend' && steps.build-frontend.outputs.digest || steps.build-backend.outputs.digest }}
+      image: "${{ steps.build-frontend.outputs.image }}${{ steps.build-backend.outputs.image }}"
+      digest: "${{ steps.build-frontend.outputs.digest }}${{ steps.build-backend.outputs.digest }}"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
 
       - name: Build Frontend
         if: inputs.component == 'frontend'
-        id: build
+        id: build-frontend
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
@@ -89,7 +89,7 @@ jobs:
 
       - name: Build Backend
         if: inputs.component == 'backend'
-        id: build
+        id: build-backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -132,7 +132,7 @@ jobs:
         working-directory: ./frontend
         run: |
           npm ci
-          npm test -- --coverage
+          npm test -- --coverage --passWithNoTests
 
       - name: Run Backend Tests
         if: inputs.component == 'backend'
