@@ -1,0 +1,53 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task: dev
+
+  dev:
+    desc: Start the development environment (infrastructure + backend + frontend)
+    deps: [up]
+    cmds:
+      - task: gen
+      - task: api
+      - task: web
+
+  up:
+    desc: Start infrastructure (Docker)
+    cmds:
+      - docker-compose up -d
+
+  down:
+    desc: Stop infrastructure
+    cmds:
+      - docker-compose down
+
+  gen:
+    desc: Generate Protobuf code and SQL code
+    cmds:
+      - task: buf
+      - task: sqlc
+
+  buf:
+    desc: Generate Protobuf code
+    dir: proto
+    cmds:
+      - buf generate
+
+  sqlc:
+    desc: Generate SQL code
+    cmds:
+      - sqlc generate
+
+  api:
+    desc: Run backend (Go)
+    dir: backend
+    cmds:
+      - go run .
+
+  web:
+    desc: Run frontend (Next.js)
+    dir: frontend
+    cmds:
+      - npm run dev
