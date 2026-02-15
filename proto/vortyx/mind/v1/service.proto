@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.mind.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/mind/v1;mindv1";
+
+// Security Awareness Training Service
+service MindService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string status = 1;
+  string version = 2;
+}

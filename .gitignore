@@ -21,9 +21,9 @@ go.work
 # AI Related
 AGENTS.md
 
-# dependencies
-/node_modules
-/.pnp
+# Frontend dependencies - ignore in all directories
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -31,29 +31,39 @@ AGENTS.md
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# Frontend build outputs
+frontend/.next/
+frontend/out/
+frontend/build/
 
-# next.js
-/.next/
-/out/
+# Backend build outputs
+backend/bin/
+backend/tmp/
 
-# production
-/build
+# Testing
+coverage/
+frontend/coverage/
+backend/coverage/
 
-# misc
+# Production
+build/
+
+# Misc
 .DS_Store
 *.pem
 
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# vercel
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Docker
+docker/data/

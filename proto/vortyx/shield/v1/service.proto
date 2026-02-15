@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.shield.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/shield/v1;shieldv1";
+
+// GRC & Compliance Service
+service ShieldService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string status = 1;
+  string version = 2;
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.control.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/control/v1;controlv1";
+
+// SaaS Management Service
+service ControlService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string status = 1;
+  string version = 2;
+}

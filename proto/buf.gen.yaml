@@ -1,0 +1,18 @@
+version: v1
+plugins:
+  - plugin: go
+    out: ../backend/gen/proto/go
+    opt: paths=source_relative
+  - plugin: connect-go
+    out: ../backend/gen/proto/go
+    opt: paths=source_relative
+  - plugin: es
+    out: ../frontend/src/gen/proto/ts
+    opt:
+      - target=ts
+      - import_extension=none
+  - plugin: connect-es
+    out: ../frontend/src/gen/proto/ts
+    opt:
+      - target=ts
+      - import_extension=none

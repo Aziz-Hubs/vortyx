@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/v1;vortyxv1";
+
+service VortyxService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {
+  string message = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}

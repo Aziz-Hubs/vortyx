@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.pilot.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/pilot/v1;pilotv1";
+
+// Professional Services Automation Service
+service PilotService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string status = 1;
+  string version = 2;
+}

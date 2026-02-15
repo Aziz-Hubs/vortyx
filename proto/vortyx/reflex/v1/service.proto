@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package vortyx.reflex.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/reflex/v1;reflexv1";
+
+// SOAR / Automation Service
+service ReflexService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string status = 1;
+  string version = 2;
+}
