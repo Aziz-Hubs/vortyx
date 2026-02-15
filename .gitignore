@@ -17,7 +17,6 @@ go.work
 .idea/
 
 # AI Related
-AGENTS.md
 
 # Frontend dependencies - ignore in all directories
 node_modules/
