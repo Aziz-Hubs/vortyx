@@ -53,8 +53,8 @@ jobs:
     name: Build ${{ inputs.component }}
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.build.outputs.image }}
-      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ inputs.component == 'frontend' && steps.build-frontend.outputs.image || steps.build-backend.outputs.image }}
+      digest: ${{ inputs.component == 'frontend' && steps.build-frontend.outputs.digest || steps.build-backend.outputs.digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
