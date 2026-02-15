@@ -4,169 +4,137 @@
 [![Deploy Staging](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml)
 [![Deploy Production](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml)
 [![Security Scan](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml)
-[![Dependency Updates](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml/badge.svg)](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Vortyx is a Modern Fullstack Platform built on a decoupled architecture.
+**Vortyx** is a next-generation **"Unified Monolith"** platform designed specifically for Managed Service Providers (MSPs) and Managed Security Service Providers (MSSPs). It combines high-performance remote monitoring, comprehensive security operations, and business automation into a single, cohesive ecosystem.
 
-## Architecture
+## 🚀 Project Overview
 
-- **Frontend**: Next.js 16 (App Router)
-- **Backend**: Go (Golang) 1.24+ (ConnectRPC)
-- **Database**: PostgreSQL 16 / TimescaleDB
-- **Identity**: Zitadel
+Vortyx adopts a **Decoupled Monolith** architecture:
+-   **Backend**: A single, high-performance Go binary serving all modules via ConnectRPC (HTTP/2).
+-   **Frontend**: A modern Next.js 16 application providing a unified dashboard.
+-   **Agent (VORT)**: A lightweight, single-binary Go agent deployed on endpoints for telemetry and execution.
+-   **Data Layer**: PostgreSQL 16 with TimescaleDB for time-series telemetry, accessed via type-safe `sqlc`.
+-   **Identity**: Zitadel for robust OIDC/OAuth2 authentication and authorization.
 
-## Prerequisites
+## ✨ Key Features
 
-- Go 1.24+
-- Node.js 20+
-- Docker & Docker Compose
-- [Task](https://taskfile.dev) (Optional, for easy commands)
-- [Buf](https://buf.build) (For Protobuf generation)
+The platform is divided into three core pillars:
 
-## Getting Started
+### 1. VORT – The Unified Machine Agent
+The distributed "hands and eyes" of the platform.
+-   **Real-Time Telemetry**: Sub-second streaming of CPU, RAM, Disk, and Network metrics.
+-   **Remote Operations**: Interactive web-based terminal (PTY), stealth file browser, and script orchestration.
+-   **Active Defense**: Autonomous process termination, network quarantine, and ransomware canary monitoring.
 
-1.  **Install dependencies**:
+### 2. Managed Services (MSP Suite)
+*Theme: Visibility, Control, and Connection.*
+-   **VortyxPulse (RMM)**: Real-time health monitoring, patch management, and remote control (RustDesk integration).
+-   **VortyxPilot (PSA)**: Intelligent ticketing, helpdesk automation, and SLA management.
+-   **VortyxNexus (CMDB)**: IT documentation, asset tracking, and dependency graph analysis.
+-   **VortyxHorizon (vCIO)**: Strategic IT planning, lifecycle management, and automated QBRs.
+-   **VortyxControl (SaaS)**: Cloud license optimization and shadow IT detection (M365/Google Workspace).
+-   **VortyxOptic (CCTV)**: AI-enhanced surveillance with local object detection.
+-   **VortyxGrid (Network)**: Network topology mapping and infrastructure orchestration.
+
+### 3. Security Services (MSSP Suite)
+*Theme: Defense, Detection, and Reflex.*
+-   **VortyxRadar (SIEM)**: Centralized log aggregation with Sigma rule-based threat detection.
+-   **VortyxGuard (EDR)**: Endpoint detection and response with kernel-level hooking.
+-   **VortyxShield (GRC)**: Automated governance, risk, and compliance reporting (ISO 27001, GDPR).
+-   **VortyxMind (Training)**: Phishing simulation and security awareness training.
+-   **VortyxProbe (Scanner)**: Internal and external vulnerability scanning.
+-   **VortyxReflex (SOAR)**: Automated incident response playbooks.
+
+## 🛠️ Tech Stack
+
+-   **Language**: Go 1.24+ (Backend/Agent), TypeScript (Frontend).
+-   **Frameworks**: Chi Router, ConnectRPC, Next.js 16, Tailwind CSS, ShadCN/UI.
+-   **Database**: PostgreSQL 16 + TimescaleDB.
+-   **Infrastructure**: Docker Compose, GitHub Actions.
+-   **Tooling**: `task` (Build), `buf` (Protobuf), `sqlc` (Database).
+
+## 📦 Getting Started
+
+### Prerequisites
+-   [Go 1.24+](https://go.dev/dl/)
+-   [Node.js 20+](https://nodejs.org/)
+-   [Docker & Docker Compose](https://www.docker.com/)
+-   [Task](https://taskfile.dev) (Recommended for running commands)
+-   [Buf](https://buf.build) (For Protobuf generation)
+
+### Installation
+
+1.  **Clone the repository**:
     ```bash
-    # Backend
+    git clone https://github.com/Aziz-Hubs/vortyx.git
+    cd vortyx
+    ```
+
+2.  **Install Backend Dependencies**:
+    ```bash
     cd backend
     go mod download
+    ```
 
-    # Frontend
+3.  **Install Frontend Dependencies**:
+    ```bash
     cd frontend
     npm install
     ```
 
-2.  **Start Infrastructure**:
+4.  **Start Infrastructure**:
     ```bash
     task up
     # OR
     docker-compose up -d
     ```
 
-3.  **Generate Code (if you changed proto files)**:
-    ```bash
-    task gen
-    # OR
-    buf generate
-    ```
+### Running Development Environment
 
-4.  **Run Development Environment**:
-    ```bash
-    task dev
-    ```
-    This will start:
-    - Infrastructure (Docker)
-    - Backend (Go) on port 8080
-    - Frontend (Next.js) on port 3000
-
-## Directory Structure
-
-- `backend/`: Go backend service
-- `frontend/`: Next.js frontend application
-- `proto/`: Protobuf definitions
-- `scripts/`: Helper scripts (e.g., DB init)
-- `docker-compose.yml`: Infrastructure configuration
-
-## Branching Strategy
-
-This project follows the **Git Flow** methodology for branch management:
-
-### Branch Types
-
-| Branch | Purpose | Base | Merges To |
-|--------|---------|------|-----------|
-| `main` | Production-ready code | - | - |
-| `dev` | Integration branch for development | `main` | `main` |
-| `feature/*` | New features | `dev` | `dev` |
-| `fix/*` | Bug fixes | `dev` | `dev` |
-| `release/*` | Release preparation | `dev` | `main`, `dev` |
-| `hotfix/*` | Critical production fixes | `main` | `main`, `dev` |
-
-### Branch Rules
-
-- **main**: Protected branch requiring pull request reviews and passing CI checks
-- **dev**: Protected branch requiring pull request reviews and passing CI checks
-- **feature/***: Created from `dev`, merged back to `dev` via PR
-- **fix/***: Created from `dev`, merged back to `dev` via PR
-- **release/***: Created from `dev`, merged to both `main` and `dev`
-- **hotfix/***: Created from `main`, merged to both `main` and `dev`
-
-### Creating Feature Branches
-
+Start the full stack (Database, Backend, Frontend):
 ```bash
-# Switch to dev branch
-git checkout dev
+task dev
+```
+-   **Frontend**: [http://localhost:3000](http://localhost:3000)
+-   **Backend API**: [http://localhost:8081](http://localhost:8081)
+-   **Zitadel Auth**: [http://localhost:8080](http://localhost:8080)
 
-# Update dev with latest changes
-git pull origin dev
+## 📂 Directory Structure
 
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Work on your feature
-git add .
-git commit -m "feat: add new feature"
-
-# Push to remote
-git push origin feature/your-feature-name
-
-# Create Pull Request to dev branch
+```text
+vortyx/
+├── backend/            # Go backend service (Unified Monolith)
+│   ├── internal/       # Domain logic (pulse, radar, etc.)
+│   └── cmd/            # Entry points
+├── frontend/           # Next.js 16 application
+├── proto/              # Protocol Buffer definitions (Single Source of Truth)
+├── docs/               # Comprehensive documentation
+└── scripts/            # Setup and maintenance scripts
 ```
 
-## CI/CD Pipeline
+## 🤝 Contributing
 
-The project uses GitHub Actions for continuous integration and deployment:
+We welcome contributions! Please follow these steps:
 
-### Workflows
+1.  **Fork the repository**.
+2.  Create a feature branch: `git checkout -b feat/amazing-feature`.
+3.  Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/): `feat(pulse): add new widget`.
+4.  **Verify your changes**: Run `task gen` and ensure tests pass.
+5.  Push to the branch: `git push origin feat/amazing-feature`.
+6.  Open a **Pull Request**.
 
-| Workflow | Trigger | Description |
-|----------|---------|-------------|
-| **CI** | PR to `main`, `dev` | Linting, testing, type checking |
-| **Deploy Staging** | Push to `main` | Deploys to staging environment |
-| **Deploy Production** | Release published | Deploys to production with approval |
-| **Security Scan** | Weekly + push to `main` | Vulnerability scanning |
-| **Dependency Updates** | Weekly | Automated dependency updates |
+For detailed guidelines, please refer to [CONTRIBUTING.md](docs/CONTRIBUTING.md) (if available) or the `docs/` directory.
 
-### Pipeline Stages
+## 📄 License
 
-1. **Lint & Test**: ESLint, TypeScript checks, Go linting, unit tests
-2. **Build**: Docker image creation with caching
-3. **Security Scan**: Trivy vulnerability scanning, CodeQL analysis
-4. **Deploy**: Environment-specific deployment with health checks
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Environment Variables
+## 📞 Support
 
-Required secrets and variables for GitHub Actions:
+For support, questions, or feedback:
+-   **Issues**: [GitHub Issues](https://github.com/Aziz-Hubs/vortyx/issues)
+-   **Email**: support@vortyx.io (Placeholder)
 
-**Repository Secrets:**
-- `SNYK_TOKEN`: Snyk security scanning token
-- `PRODUCTION_DATABASE_URL`: Production database connection
-- `STAGING_DATABASE_URL`: Staging database connection
-- `PRODUCTION_ZITADEL_URL`: Production Zitadel instance URL
-- `STAGING_ZITADEL_URL`: Staging Zitadel instance URL
-- `DOCKER_REGISTRY_TOKEN`: Container registry authentication
-
-**Repository Variables:**
-- `PRODUCTION_API_URL`: Production API endpoint
-- `STAGING_API_URL`: Staging API endpoint
-
-### Status Badges
-
-![CI](https://github.com/Aziz-Hubs/vortyx/actions/workflows/ci.yml/badge.svg)
-![Deploy Staging](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-staging.yml/badge.svg)
-![Deploy Production](https://github.com/Aziz-Hubs/vortyx/actions/workflows/deploy-production.yml/badge.svg)
-![Security Scan](https://github.com/Aziz-Hubs/vortyx/actions/workflows/security.yml/badge.svg)
-![Dependency Updates](https://github.com/Aziz-Hubs/vortyx/actions/workflows/dependency-updates.yml/badge.svg)
-
-## Contributing
-
-1. Create a feature branch from `dev`
-2. Make your changes following the [commit guidelines](docs/development/coding_standards.md)
-3. Run tests locally: `task gen && go test ./... && npm test`
-4. Submit a pull request to `dev`
-5. Wait for CI checks and code review
-6. Squash and merge after approval
-
-## License
-
-MIT
+---
+*Built with ❤️ by the Vortyx Team*
