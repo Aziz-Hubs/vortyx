@@ -155,7 +155,7 @@ jobs:
       - name: Setup Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          version: '1.28'
+          version: 'v1.28.1'
 
       - name: Run buf lint
         working-directory: ./proto
@@ -168,6 +168,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
