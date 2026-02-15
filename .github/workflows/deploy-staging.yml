@@ -16,11 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '20'
-  GO_VERSION: '1.24'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  STAGING_ENV: 'staging'
 
 jobs:
   validate:
@@ -32,6 +29,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Check for file changes
         id: check_changes
@@ -50,102 +49,40 @@ jobs:
           fi
 
   build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
     needs: validate
     if: needs.validate.outputs.has_frontend_changes == 'true'
-    outputs:
-      frontend_image: ${{ steps.build.outputs.image }}
-      frontend_digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=staging,enable={{is_default_branch}}
-
-      - name: Build and push frontend
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}
-            NEXT_TELEMETRY_DISABLED=1
-          outputs: type=image,name=${{ steps.meta.outputs.image }},push=true
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      component: 'frontend'
+      environment: 'staging'
+      push: true
+      registry: ghcr.io
+    secrets:
+      registry_username: ${{ github.actor }}
+      registry_password: ${{ secrets.GITHUB_TOKEN }}
 
   build-backend:
-    name: Build Backend
-    runs-on: ubuntu-latest
     needs: validate
     if: needs.validate.outputs.has_backend_changes == 'true'
-    outputs:
-      backend_image: ${{ steps.build.outputs.image }}
-      backend_digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=staging,enable={{is_default_branch}}
-
-      - name: Build and push backend
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            GO_VERSION=${{ env.GO_VERSION }}
-          outputs: type=image,name=${{ steps.meta.outputs.image }},push=true
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      component: 'backend'
+      environment: 'staging'
+      push: true
+      registry: ghcr.io
+    secrets:
+      registry_username: ${{ github.actor }}
+      registry_password: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [validate, build-frontend, build-backend]
+    if: |
+      always() &&
+      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
+      !(needs.build-frontend.result == 'skipped' && needs.build-backend.result == 'skipped')
     environment:
       name: staging
       url: https://staging.vortyx.example.com
@@ -156,19 +93,33 @@ jobs:
       - name: Deploy to Staging Environment
         run: |
           echo "Deploying to staging environment..."
-          echo "Frontend Image: ${{ needs.build-frontend.outputs.frontend_image }}"
-          echo "Backend Image: ${{ needs.build-backend.outputs.backend_image }}"
+          
+          FRONTEND_IMAGE="${{ needs.build-frontend.outputs.image }}"
+          BACKEND_IMAGE="${{ needs.build-backend.outputs.image }}"
+          
+          if [ -z "$FRONTEND_IMAGE" ]; then
+            echo "Frontend was not rebuilt, using previous version (simulated)"
+            FRONTEND_IMAGE="ghcr.io/${{ github.repository }}/vortyx-frontend:staging"
+          fi
+          
+          if [ -z "$BACKEND_IMAGE" ]; then
+            echo "Backend was not rebuilt, using previous version (simulated)"
+            BACKEND_IMAGE="ghcr.io/${{ github.repository }}/vortyx-backend:staging"
+          fi
+          
+          echo "Frontend Image: $FRONTEND_IMAGE"
+          echo "Backend Image: $BACKEND_IMAGE"
           
           # Create deployment manifest
           cat > staging-deployment.yml << EOF
           version: '3.8'
           services:
             frontend:
-              image: ${{ needs.build-frontend.outputs.frontend_image }}
+              image: $FRONTEND_IMAGE
               environment:
                 - NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}
             backend:
-              image: ${{ needs.build-backend.outputs.backend_image }}
+              image: $BACKEND_IMAGE
               environment:
                 - DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
                 - ZITADEL_URL=${{ vars.STAGING_ZITADEL_URL }}
@@ -185,9 +136,16 @@ jobs:
         run: |
           echo "## Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
+          FRONTEND_IMAGE="${{ needs.build-frontend.outputs.image }}"
+          if [ -z "$FRONTEND_IMAGE" ]; then FRONTEND_IMAGE="(Skipped - No Changes)"; fi
+          
+          BACKEND_IMAGE="${{ needs.build-backend.outputs.image }}"
+          if [ -z "$BACKEND_IMAGE" ]; then BACKEND_IMAGE="(Skipped - No Changes)"; fi
+          
           echo "| Service | Status | Image |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend | ✅ Deployed | `${{ needs.build-frontend.outputs.frontend_image }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend | ✅ Deployed | `${{ needs.build-backend.outputs.backend_image }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ✅ Deployed | \`$FRONTEND_IMAGE\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ✅ Deployed | \`$BACKEND_IMAGE\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🌐 **Staging URL**: https://staging.vortyx.example.com" >> $GITHUB_STEP_SUMMARY
