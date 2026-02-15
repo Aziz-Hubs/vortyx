@@ -1,0 +1,110 @@
+networks:
+  vortyx-net:
+
+volumes:
+  db_data:
+  rustdesk-data:
+
+services:
+  main-database:
+    container_name: main-database
+    image: timescale/timescaledb:latest-pg16
+    ports:
+      - "5432:5432"
+    environment:
+      PGUSER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready
+        - -d
+        - zitadel
+        - -U
+        - postgres
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - vortyx-net
+
+  zitadel:
+    restart: unless-stopped
+    container_name: zitadel
+    image: ghcr.io/zitadel/zitadel:latest
+    command: start-from-init --masterkey "MasterkeyNeedsToHave32Characters"
+    ports:
+      - "8080:8080"
+    environment:
+      ZITADEL_EXTERNALDOMAIN: localhost
+      ZITADEL_EXTERNALSECURE: false
+      ZITADEL_TLS_ENABLED: false
+
+
+      # Database connection settings
+      ZITADEL_DATABASE_POSTGRES_HOST: main-database
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+
+      # Disable Login v2 - use built-in Login v1
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
+
+      # First instance configuration
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: false
+    healthcheck:
+      test:
+        - CMD
+        - /app/zitadel
+        - ready
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+    user: "0"
+    depends_on:
+      main-database:
+        condition: service_healthy
+    networks:
+      - vortyx-net
+
+  hbbs-rustdesk:
+    image: rustdesk/rustdesk-server-s6:latest
+    container_name: hbbs-rustdesk
+    command: hbbs
+    volumes:
+      - rustdesk-data:/root
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+    depends_on:
+      - hbbr-rustdesk
+    networks:
+      - vortyx-net
+
+  hbbr-rustdesk:
+    image: rustdesk/rustdesk-server-s6:latest
+    container_name: hbbr-rustdesk
+    command: hbbr
+    volumes:
+      - rustdesk-data:/root
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+    networks:
+      - vortyx-net 
+    
+
+
+
+
