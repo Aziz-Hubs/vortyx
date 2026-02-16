@@ -13,15 +13,27 @@ These variables are used when running `task dev` or `docker-compose up`.
 | :--- | :--- | :--- |
 | `PORT` | The port the backend server listens on. | `8081` |
 | `DATABASE_URL` | PostgreSQL connection string. | `postgres://postgres:password@localhost:5432/vortyx?sslmode=disable` |
-| `ZITADEL_ISSUER` | URL of the Zitadel instance. | `http://localhost:8080` |
+| `ZITADEL_DOMAIN` | Zitadel gRPC/API address (host:port). | `localhost:8080` |
+| `ZITADEL_ISSUER` | Zitadel OIDC issuer URL. | `http://localhost:8080` |
+| `ZITADEL_AUDIENCES` | Comma-separated accepted `aud` values for JWT access tokens. | `3600801544557033557,360224206048264197` |
+| `ZITADEL_API_PROJECT_ID` | Zitadel Project Resource ID for Vortyx Platform. | `3600801544557033557` |
+| `ZITADEL_INSECURE` | Use insecure connections to Zitadel (local dev only). | `true` |
+| `ZITADEL_INSECURE_PORT` | Insecure port when `ZITADEL_INSECURE=true`. | `8080` |
+| `ZITADEL_PAT` | Personal Access Token for Management API (optional). | `(secret)` |
+| `ZITADEL_SERVICE_USER_KEY_PATH` | Service-user key file path for Management API (optional). | `./json secrets/<file>.json` |
 | `LOG_LEVEL` | Logging verbosity. | `debug` |
 
 ### Frontend Application
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
-| `NEXT_PUBLIC_API_URL` | Base URL for the Backend API. | `http://localhost:8081` |
-| `NEXT_PUBLIC_ZITADEL_CLIENT_ID` | OAuth2 Client ID for Frontend. | `23487234@vortyx` |
-| `NEXT_PUBLIC_ZITADEL_ISSUER` | URL of the Zitadel instance. | `http://localhost:8080` |
+| `NEXT_PUBLIC_API_URL` | Base URL for the Backend API (browser). | `http://localhost:8081` |
+| `ZITADEL_ISSUER` | Zitadel OIDC issuer URL (NextAuth server-side). | `http://localhost:8080` |
+| `ZITADEL_CLIENT_ID` | Zitadel OIDC client ID for `vortyx-frontend`. | `360224206048264197` |
+| `ZITADEL_CLIENT_SECRET` | Zitadel OIDC client secret for `vortyx-frontend`. | `(secret)` |
+| `ZITADEL_API_PROJECT_ID` | Adds API audience to access tokens via reserved scope. | `3600801544557033557` |
+| `ZITADEL_ENABLE_PASSWORD_GRANT` | Enables legacy password grant login (not recommended). | `false` |
+| `NEXTAUTH_URL` | Public base URL of the frontend. | `http://localhost:3000` |
+| `NEXTAUTH_SECRET` | NextAuth secret. | `(secret)` |
 
 ### Infrastructure (Docker Compose)
 | Variable | Description | Default |

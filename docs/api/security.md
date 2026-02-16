@@ -2,7 +2,7 @@
 
 ## Overview
 
-Vortyx uses the **Zitadel SDK** for authentication and authorization. The security layer is implemented in `backend/internal/auth/` using the official Zitadel Go SDK (`zitadel-go/v3`).
+Vortyx uses the **Zitadel SDK** for authentication and authorization. The security layer is implemented in `backend/internal/server/interceptors/` using the official Zitadel Go SDK (`zitadel-go/v3`).
 
 ## Table of Contents
 
@@ -19,9 +19,8 @@ Vortyx uses the **Zitadel SDK** for authentication and authorization. The securi
 The authentication system is implemented in a single package:
 
 ```
-backend/internal/auth/
-├── middleware.go        # Zitadel SDK authentication
-└── middleware_test.go   # Unit tests
+backend/internal/server/interceptors/
+└── auth.go
 ```
 
 ### Key Components
@@ -34,7 +33,7 @@ backend/internal/auth/
 
 ## Authentication Middleware
 
-**File:** `middleware.go`
+**File:** `backend/internal/server/interceptors/auth.go`
 
 The authentication middleware verifies JWT tokens issued by Zitadel using the official Zitadel Go SDK.
 
@@ -50,57 +49,21 @@ The authentication middleware verifies JWT tokens issued by Zitadel using the of
 
 ```go
 import (
-    "context"
-    "log"
-    "os"
+	"net/http"
 
-    "github.com/abdul/vortyx/backend/internal/auth"
-    "github.com/go-chi/chi/v5"
-    "github.com/go-chi/chi/v5/middleware"
-    "github.com/go-chi/cors"
-    "connectrpc.com/connect"
+	"github.com/go-chi/chi/v5"
+	"github.com/abdul/vortyx/backend/internal/server/interceptors"
 )
 
 func NewRouter() http.Handler {
-    r := chi.NewRouter()
+	r := chi.NewRouter()
 
-    // Get Zitadel domain from environment
-    zitadelDomain := os.Getenv("ZITADEL_DOMAIN")
-    if zitadelDomain == "" {
-        zitadelDomain = "localhost:8080"
-    }
-
-    // Create authenticator with Zitadel SDK
-    authenticator, err := auth.NewZitadelAuthenticator(context.Background(), zitadelDomain)
-    var interceptors connect.Option
-    if err != nil {
-        log.Printf("Warning: Failed to initialize authenticator: %v", err)
-        interceptors = connect.WithInterceptors()
-    } else {
-        // Use HTTP middleware
-        r.Use(authenticator.Middleware)
-        
-        // Use ConnectRPC interceptor
-        interceptors = connect.WithInterceptors(authenticator.Interceptor())
-    }
-
-    // Basic middleware
-    r.Use(middleware.Logger)
-    r.Use(middleware.Recoverer)
-
-    // CORS (using chi/cors)
-    r.Use(cors.Handler(cors.Options{
-        AllowedOrigins:   []string{"http://localhost:3000"},
-        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-        AllowCredentials: true,
-        MaxAge:           300,
-    }))
-
-    // Mount services with interceptors
-    // ...
-
-    return r
+	authMw, connectOpts := interceptors.AuthMiddleware(interceptors.DefaultAuthConfig())
+	if authMw != nil {
+		r.Use(authMw)
+	}
+	_ = connectOpts
+	return r
 }
 ```
 
@@ -109,27 +72,27 @@ func NewRouter() http.Handler {
 The authenticator supports several configuration options:
 
 ```go
-import "github.com/abdul/vortyx/backend/internal/auth"
+import "github.com/abdul/vortyx/backend/internal/server/interceptors"
 
 // Set custom client ID
-auth.NewZitadelAuthenticator(
+interceptors.NewZitadelAuthenticator(
     ctx,
     "localhost:8080",
-    auth.WithClientID("your-client-id"),
+    interceptors.WithClientID("your-client-id"),
 )
 
 // Use introspection instead of JWT verification
-auth.NewZitadelAuthenticator(
+interceptors.NewZitadelAuthenticator(
     ctx,
     "localhost:8080",
-    auth.WithVerificationMethod(auth.IntrospectionVerification),
+    interceptors.WithVerificationMethod(interceptors.IntrospectionVerification),
 )
 
 // Configure service account key for introspection
-auth.NewZitadelAuthenticator(
+interceptors.NewZitadelAuthenticator(
     ctx,
     "localhost:8080",
-    auth.WithServiceAccountKey("/path/to/key.json", "client-id", "client-secret"),
+    interceptors.WithServiceAccountKey("/path/to/key.json", "client-id", "client-secret"),
 )
 ```
 
@@ -161,32 +124,32 @@ The middleware injects the following values into the request context:
 
 ### Helper Functions
 
-The auth package provides utility functions to extract user information:
+The interceptors package provides utility functions to extract user information:
 
 ```go
-import "github.com/abdul/vortyx/backend/internal/auth"
+import "github.com/abdul/vortyx/backend/internal/server/interceptors"
 
 // In your handler
 func HandleGetUser(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
     // Get user ID from context
-    userID := auth.GetUserID(ctx)
+    userID := interceptors.GetUserID(ctx)
 
     // Get user email
-    email := auth.GetEmail(ctx)
+    email := interceptors.GetEmail(ctx)
 
     // Get organization ID
-    orgID := auth.GetOrganizationID(ctx)
+    orgID := interceptors.GetOrganizationID(ctx)
 
     // Get user roles
-    roles := auth.GetRoles(ctx)
+    roles := interceptors.GetRoles(ctx)
 
     // Get username
-    username := auth.GetUsername(ctx)
+    username := interceptors.GetUsername(ctx)
 
     // Check if user has specific role
-    if auth.HasRole(ctx, "admin") {
+    if interceptors.HasRole(ctx, "admin") {
         // User is admin
     }
 }
@@ -199,11 +162,11 @@ For ConnectRPC services, use the interceptor:
 ```go
 import (
     "connectrpc.com/connect"
-    "github.com/abdul/vortyx/backend/internal/auth"
+    "github.com/abdul/vortyx/backend/internal/server/interceptors"
 )
 
 // Create authenticator
-authenticator, _ := auth.NewZitadelAuthenticator(ctx, "localhost:8080")
+authenticator, _ := interceptors.NewZitadelAuthenticator(ctx, "localhost:8080")
 
 // Use interceptor with service
 interceptors := connect.WithInterceptors(authenticator.Interceptor())
@@ -297,11 +260,11 @@ func NewRouter() http.Handler {
 
 ## Testing
 
-Run the authentication middleware tests:
+Run backend tests:
 
 ```bash
 cd backend
-go test ./internal/auth/... -v
+go test ./... 
 ```
 
 ### Test Coverage

@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package vortyx.vort.v1;
+
+option go_package = "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/vort/v1;vortv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// VORT Agent Management Service
+service VortService {
+  // Registers a new agent
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+
+  // Authenticates an agent
+  rpc AuthenticateAgent(AuthenticateAgentRequest) returns (AuthenticateAgentResponse);
+
+  // Sends a heartbeat
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Retrieves agent details
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+
+  // Lists agents
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+
+  // Submits agent data
+  rpc SubmitData(SubmitDataRequest) returns (SubmitDataResponse);
+}
+
+message RegisterAgentRequest {
+  string name = 1;
+  string hostname = 2;
+  string ip_address = 3;
+  string os_type = 4;
+  string os_version = 5;
+  string arch = 6;
+  string version = 7;
+  repeated string capabilities = 8;
+  string agent_key = 9;
+  string organization_id = 10;
+  repeated string tags = 11;
+}
+
+message RegisterAgentResponse {
+  string agent_id = 1;
+  string agent_key = 2; // Generated/Confirmed key
+  string status = 3;
+  google.protobuf.Struct config = 4;
+}
+
+message AuthenticateAgentRequest {
+  string agent_key = 1;
+  string secret = 2;
+}
+
+message AuthenticateAgentResponse {
+  string token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message HeartbeatRequest {
+  string agent_id = 1;
+  string status = 2; // e.g., "online", "degraded"
+  map<string, string> metrics = 3;
+}
+
+message HeartbeatResponse {
+  string status = 1;
+  bool command_pending = 2;
+}
+
+message GetAgentRequest {
+  string agent_id = 1;
+}
+
+message GetAgentResponse {
+  Agent agent = 1;
+}
+
+message ListAgentsRequest {
+  string organization_id = 1;
+  string status = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  int32 total_count = 2;
+}
+
+message SubmitDataRequest {
+  string agent_id = 1;
+  string data_type = 2;
+  google.protobuf.Struct payload = 3;
+}
+
+message SubmitDataResponse {
+  string data_id = 1;
+  string status = 2;
+}
+
+message Agent {
+  string id = 1;
+  string name = 2;
+  string hostname = 3;
+  string ip_address = 4;
+  string os_type = 5;
+  string os_version = 6;
+  string arch = 7;
+  string version = 8;
+  string status = 9;
+  google.protobuf.Timestamp last_heartbeat = 10;
+  google.protobuf.Timestamp registered_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  repeated string tags = 13;
+  repeated string capabilities = 14;
+}

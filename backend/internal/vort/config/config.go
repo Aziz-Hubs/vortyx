@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // =============================================================================
@@ -32,6 +34,9 @@ import (
 //   addr := cfg.GetServerAddress()
 type Config struct {
 	mu sync.RWMutex
+
+	// Logger instance
+	Logger zerolog.Logger
 
 	// Server configuration
 	Server ServerConfig
@@ -143,6 +148,43 @@ type LoggingConfig struct {
 //   - error: Any configuration error
 func Load() (*Config, error) {
 	cfg := &Config{}
+
+	// Logging defaults
+	logLevel := getEnv("VORT_LOG_LEVEL", "info")
+	logFormat := getEnv("VORT_LOG_FORMAT", "json")
+	outputPath := getEnv("VORT_LOG_OUTPUT_PATH", "stdout")
+
+	var level zerolog.Level
+	switch logLevel {
+	case "debug":
+		level = zerolog.DebugLevel
+	case "warn":
+		level = zerolog.WarnLevel
+	case "error":
+		level = zerolog.ErrorLevel
+	default:
+		level = zerolog.InfoLevel
+	}
+
+	if outputPath == "stdout" {
+		logger := zerolog.New(os.Stdout).Level(level)
+		if logFormat == "text" {
+			logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+		}
+		cfg.Logger = logger
+	} else {
+		f, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			logger := zerolog.New(os.Stdout).Level(level)
+			logger.Error().Err(err).Str("path", outputPath).Msg("failed to open log file, using stdout")
+		} else {
+			logger := zerolog.New(f).Level(level)
+			if logFormat == "text" {
+				logger = logger.Output(zerolog.ConsoleWriter{Out: f})
+			}
+			cfg.Logger = logger
+		}
+	}
 
 	// Server defaults
 	cfg.Server.Host = getEnv("VORT_SERVER_HOST", "0.0.0.0")

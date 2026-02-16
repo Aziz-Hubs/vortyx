@@ -45,31 +45,22 @@ export const authOptions = {
 
 ## Backend Validation
 
-The backend uses a middleware to validate tokens on every request using the Zitadel Go SDK.
+The backend uses a middleware and ConnectRPC interceptor to validate tokens on every request using the Zitadel Go SDK.
 
 ### Creating the Authenticator
 
 ```go
-// internal/auth/middleware.go
 import (
-    "github.com/abdul/vortyx/backend/internal/auth"
-    "github.com/zitadel/zitadel-go/v3/pkg/zitadel"
+	"github.com/abdul/vortyx/backend/internal/server/interceptors"
 )
 
-// Create authenticator with insecure connection for local development
-authenticator, err := auth.NewZitadelAuthenticator(
-    ctx,
-    "localhost:8080", // Zitadel domain
-)
-if err != nil {
-    log.Printf("Failed to create authenticator: %v", err)
+authMw, connectOpts := interceptors.AuthMiddleware(interceptors.DefaultAuthConfig())
+if authMw != nil {
+	r.Use(authMw)
 }
 
-// Use middleware
-r.Use(authenticator.Middleware)
-
-// Or use ConnectRPC interceptor
-interceptors := connect.WithInterceptors(authenticator.Interceptor())
+path, handler := someconnect.NewSomeServiceHandler(svc, connectOpts)
+r.Mount(path, handler)
 ```
 
 ### Configuration Options
@@ -173,9 +164,9 @@ The Zitadel SDK middleware provides:
 
 ## Testing
 
-Run the authentication middleware tests:
+Run backend tests:
 
 ```bash
 cd backend
-go test ./internal/auth/... -v
+go test ./... 
 ```

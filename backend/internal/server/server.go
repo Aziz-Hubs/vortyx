@@ -1,5 +1,5 @@
 // Package server provides the main HTTP server implementation for the Vortyx backend.
-// It sets up the chi router, configures middleware, and registers all service handlers.
+// It sets up the chi router, configures interceptors, and registers all service handlers.
 //
 // The server uses ConnectRPC for gRPC-style APIs and chi for HTTP routing.
 // Authentication is handled by the auth package using Zitadel OIDC.
@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,8 +20,11 @@ import (
 
 	v1 "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/v1"
 	"github.com/abdul/vortyx/backend/gen/proto/go/vortyx/v1/vortyxv1connect"
+	platformConnect "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/platform/v1/platformv1connect"
 
-	middleware "github.com/abdul/vortyx/backend/internal/server/middleware"
+	"github.com/abdul/vortyx/backend/internal/server/health"
+	"github.com/abdul/vortyx/backend/internal/server/interceptors"
+	platformPkg "github.com/abdul/vortyx/backend/internal/platform"
 
 	// MSP (Managed Service Provider) packages
 	mspControlPkg "github.com/abdul/vortyx/backend/internal/msp/control"
@@ -58,8 +62,9 @@ import (
 	msspSignalConnect "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/signal/v1/signalv1connect"
 	msspSonarConnect "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/sonar/v1/sonarv1connect"
 
-	// Platform package
-	// Note: Platform service is planned for future implementation
+	// VORT Agent package
+	vortConnect "github.com/abdul/vortyx/backend/gen/proto/go/vortyx/vort/v1/vortv1connect"
+	vortPkg "github.com/abdul/vortyx/backend/internal/vort/service"
 )
 
 // VortyxServer is the main server implementation that handles base API requests.
@@ -96,46 +101,76 @@ func NewRouter(dbPool *pgxpool.Pool) http.Handler {
 	r := chi.NewRouter()
 
 	// ==========================
-	// Security Middleware
+	// Base Interceptors
 	// ==========================
-	authMiddleware, interceptors := middleware.AuthMiddleware(middleware.DefaultAuthConfig())
-	if authMiddleware != nil {
-		r.Use(authMiddleware)
+	r.Use(interceptors.CORSMiddleware(interceptors.DefaultCORSConfig()))
+	r.Use(interceptors.RequestIDMiddleware())
+	r.Use(interceptors.TracingMiddleware("vortyx-backend"))
+	r.Use(interceptors.LoggerMiddleware())
+	r.Use(interceptors.RecovererMiddleware())
+	r.Use(interceptors.SecurityMiddleware(interceptors.DefaultSecurityConfig()))
+	r.Use(interceptors.CompressionMiddleware())
+	r.Use(interceptors.MetricsMiddleware())
+	r.Use(interceptors.RateLimitMiddleware(interceptors.DefaultRateLimitConfig()))
+
+	// ==========================
+	// Security Interceptors
+	// ==========================
+	authInterceptor, connectInterceptors := interceptors.AuthInterceptor(interceptors.DefaultAuthConfig())
+	if authInterceptor != nil {
+		r.Use(authInterceptor)
+		r.Use(interceptors.AuditMiddleware())
 	}
 
-	// ==========================
-	// Core Middleware
-	// ==========================
-	r.Use(middleware.LoggerMiddleware())
-	r.Use(middleware.RecovererMiddleware())
-
-	// ==========================
-	// HTTP Middleware
-	// ==========================
-	r.Use(middleware.CORSMiddleware(middleware.DefaultCORSConfig()))
-
 	// Register the base Vortyx service handler.
-	path, handler := vortyxv1connect.NewVortyxServiceHandler(&VortyxServer{}, interceptors)
+	path, handler := vortyxv1connect.NewVortyxServiceHandler(&VortyxServer{}, connectInterceptors)
 	r.Mount(path, handler)
 
+	// Health Check
+	r.Get("/health", health.NewHandler(dbPool))
+
+	projectID := os.Getenv("ZITADEL_API_PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("ZITADEL_PLATFORM_PROJECT_ID")
+	}
+
+	zitadelMgmtClient, err := NewZitadelManagementClient(context.Background())
+	if err != nil {
+		zitadelMgmtClient = nil
+	}
+
+	platformService := platformPkg.NewService(dbPool, zitadelMgmtClient, projectID)
+	r.Mount(platformConnect.NewPlatformServiceHandler(platformService, connectInterceptors))
+
 	// Register MSP (Managed Service Provider) services.
-	r.Mount(mspPulseConnect.NewPulseServiceHandler(mspPulsePkg.NewService(dbPool), interceptors))
-	r.Mount(mspPilotConnect.NewPilotServiceHandler(mspPilotPkg.NewService(dbPool), interceptors))
-	r.Mount(mspNexusConnect.NewNexusServiceHandler(mspNexusPkg.NewService(dbPool), interceptors))
-	r.Mount(mspHorizonConnect.NewHorizonServiceHandler(mspHorizonPkg.NewService(dbPool), interceptors))
-	r.Mount(mspControlConnect.NewControlServiceHandler(mspControlPkg.NewService(dbPool), interceptors))
-	r.Mount(mspOpticConnect.NewOpticServiceHandler(mspOpticPkg.NewService(dbPool), interceptors))
-	r.Mount(mspGridConnect.NewGridServiceHandler(mspGridPkg.NewService(dbPool), interceptors))
+	r.Mount(mspPulseConnect.NewPulseServiceHandler(mspPulsePkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspPilotConnect.NewPilotServiceHandler(mspPilotPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspNexusConnect.NewNexusServiceHandler(mspNexusPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspHorizonConnect.NewHorizonServiceHandler(mspHorizonPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspControlConnect.NewControlServiceHandler(mspControlPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspOpticConnect.NewOpticServiceHandler(mspOpticPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(mspGridConnect.NewGridServiceHandler(mspGridPkg.NewService(dbPool), connectInterceptors))
 
 	// Register MSSP (Managed Security Service Provider) services.
-	r.Mount(msspRadarConnect.NewRadarServiceHandler(msspRadarPkg.NewService(dbPool), interceptors))
-	r.Mount(msspGuardConnect.NewGuardServiceHandler(msspGuardPkg.NewService(dbPool), interceptors))
-	r.Mount(msspShieldConnect.NewShieldServiceHandler(msspShieldPkg.NewService(dbPool), interceptors))
-	r.Mount(msspMindConnect.NewMindServiceHandler(msspMindPkg.NewService(dbPool), interceptors))
-	r.Mount(msspProbeConnect.NewProbeServiceHandler(msspProbePkg.NewService(dbPool), interceptors))
-	r.Mount(msspReflexConnect.NewReflexServiceHandler(msspReflexPkg.NewService(dbPool), interceptors))
-	r.Mount(msspSonarConnect.NewSonarServiceHandler(msspSonarPkg.NewService(dbPool), interceptors))
-	r.Mount(msspSignalConnect.NewSignalServiceHandler(msspSignalPkg.NewService(dbPool), interceptors))
+	r.Mount(msspRadarConnect.NewRadarServiceHandler(msspRadarPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspGuardConnect.NewGuardServiceHandler(msspGuardPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspShieldConnect.NewShieldServiceHandler(msspShieldPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspMindConnect.NewMindServiceHandler(msspMindPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspProbeConnect.NewProbeServiceHandler(msspProbePkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspReflexConnect.NewReflexServiceHandler(msspReflexPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspSonarConnect.NewSonarServiceHandler(msspSonarPkg.NewService(dbPool), connectInterceptors))
+	r.Mount(msspSignalConnect.NewSignalServiceHandler(msspSignalPkg.NewService(dbPool), connectInterceptors))
+
+	// Register VORT Agent service.
+	// Note: We use the Zitadel-based authentication interceptor.
+	vortService := vortPkg.NewServiceFromPool(dbPool)
+	r.Mount(vortConnect.NewVortServiceHandler(vortService, connectInterceptors))
+
+	// Register profiling handlers (for debugging)
+	// Only enable in development mode
+	if os.Getenv("ENV") != "production" && os.Getenv("ENV") != "prod" {
+		interceptors.MountPprof(r)
+	}
 
 	// Wrap with h2c to support HTTP/2 without TLS.
 	// This enables gRPC-style streaming and better performance.

@@ -2,7 +2,7 @@ import { createConnectTransport } from "@connectrpc/connect-web";
 import { getSession } from "next-auth/react";
 
 export const transport = createConnectTransport({
-  baseUrl: "http://localhost:8081",
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081",
   interceptors: [
     (next) => async (req) => {
       if (typeof window !== "undefined") {

@@ -10,19 +10,19 @@ import (
 	"github.com/abdul/vortyx/backend/internal/msp/pulse/db"
 )
 
-type Service struct {
+type PulseService struct {
 	repo db.Querier
 	pool *pgxpool.Pool
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{
+func NewService(pool *pgxpool.Pool) *PulseService {
+	return &PulseService{
 		pool: pool,
 		repo: db.New(pool),
 	}
 }
 
-func (s *Service) GetStatus(
+func (s *PulseService) GetStatus(
 	ctx context.Context,
 	req *connect.Request[pulsev1.GetStatusRequest],
 ) (*connect.Response[pulsev1.GetStatusResponse], error) {

@@ -1,30 +1,36 @@
-// Package middleware provides authentication middleware using Zitadel OIDC integration.
+// Package interceptors provides authentication interceptors using Zitadel OIDC integration.
 //
 // This package implements JWT-based authentication and authorization for HTTP handlers
 // and ConnectRPC services. It leverages the Zitadel SDK to validate tokens issued
 // by a Zitadel identity provider.
-package middleware
+package interceptors
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
 	"connectrpc.com/connect"
+	"github.com/rs/zerolog/log"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization/oauth"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
 // publicEndpoints defines paths that do not require authentication.
 // These endpoints are typically health checks or public API entry points.
+// VORT agent endpoints (RegisterAgent, AuthenticateAgent) are public as they
+// handle initial agent registration and token issuance via Zitadel machine users.
 var publicEndpoints = map[string]bool{
-	"/health":      true,
-	"/healthz":     true,
-	"/ping":        true,
-	"/api/v1/ping": true,
+	"/health":           true,
+	"/healthz":          true,
+	"/ping":             true,
+	"/api/v1/ping":      true,
+	"/api/vort/v1/register": true,
+	"/api/vort/v1/authenticate": true,
 }
 
 // isPublicEndpoint checks if the given path is a public endpoint that does not
@@ -67,8 +73,9 @@ const (
 // The authenticator is safe for concurrent use and can be shared across
 // multiple goroutines.
 type ZitadelAuthenticator struct {
-	verifier           *oauth.JWTVerification
+	jwtVerifiers       []*oauth.JWTVerification
 	zitadelInstance    *zitadel.Zitadel
+	audiences          []string
 	clientID           string
 	verificationMethod VerificationMethod
 	serviceAccountKey  *ServiceAccountKey
@@ -118,6 +125,20 @@ func WithClientID(clientID string) ZitadelAuthenticatorOption {
 	}
 }
 
+func WithAudiences(audiences ...string) ZitadelAuthenticatorOption {
+	return func(a *ZitadelAuthenticator) {
+		filtered := make([]string, 0, len(audiences))
+		for _, aud := range audiences {
+			aud = strings.TrimSpace(aud)
+			if aud == "" {
+				continue
+			}
+			filtered = append(filtered, aud)
+		}
+		a.audiences = filtered
+	}
+}
+
 // WithVerificationMethod sets the token verification method.
 // The default is JWTVerification which performs local validation.
 func WithVerificationMethod(method VerificationMethod) ZitadelAuthenticatorOption {
@@ -141,6 +162,7 @@ func WithServiceAccountKey(keyPath, clientID, clientSecret string) ZitadelAuthen
 // AuthConfig holds configuration for authentication middleware.
 type AuthConfig struct {
 	ZitadelDomain string
+	Audiences    []string
 }
 
 // DefaultAuthConfig returns the default authentication configuration.
@@ -151,8 +173,29 @@ func DefaultAuthConfig() AuthConfig {
 	if domain == "" {
 		domain = "localhost:8080"
 	}
+
+	audiences := splitCSV(os.Getenv("ZITADEL_AUDIENCES"))
+	if len(audiences) == 0 {
+		single := strings.TrimSpace(os.Getenv("ZITADEL_AUDIENCE"))
+		if single != "" {
+			audiences = []string{single}
+		}
+	}
+	if len(audiences) == 0 {
+		projectID := strings.TrimSpace(os.Getenv("ZITADEL_API_PROJECT_ID"))
+		if projectID != "" {
+			audiences = []string{projectID}
+		}
+	}
+	if len(audiences) == 0 {
+		clientID := strings.TrimSpace(os.Getenv("ZITADEL_CLIENT_ID"))
+		if clientID != "" {
+			audiences = []string{clientID}
+		}
+	}
 	return AuthConfig{
 		ZitadelDomain: domain,
+		Audiences:    audiences,
 	}
 }
 
@@ -175,23 +218,34 @@ func NewZitadelAuthenticator(
 	authenticator := &ZitadelAuthenticator{
 		verificationMethod: JWTVerification,
 		clientID:           "zitadel",
+		audiences:          []string{"zitadel"},
 	}
 
 	for _, opt := range opts {
 		opt(authenticator)
 	}
 
-	// Use insecure connection for local development.
-	// TODO: Detect environment and use TLS in production.
-	zitadelInstance := zitadel.New(zitadelDomain, zitadel.WithInsecure("8080"))
+	zitadelOpts := []zitadel.Option{}
+	insecure := strings.EqualFold(os.Getenv("ZITADEL_INSECURE"), "true") ||
+		strings.HasPrefix(zitadelDomain, "localhost") ||
+		strings.HasPrefix(zitadelDomain, "127.0.0.1")
+	if insecure {
+		insecurePort := os.Getenv("ZITADEL_INSECURE_PORT")
+		if insecurePort == "" {
+			insecurePort = "8080"
+		}
+		zitadelOpts = append(zitadelOpts, zitadel.WithInsecure(insecurePort))
+	}
+
+	zitadelInstance := zitadel.New(zitadelDomain, zitadelOpts...)
 	authenticator.zitadelInstance = zitadelInstance
 
-	verifier, err := authenticator.createVerifier(ctx)
+	verifiers, err := authenticator.createJWTVerifiers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token verifier: %w", err)
 	}
 
-	authenticator.verifier = verifier
+	authenticator.jwtVerifiers = verifiers
 	authenticator.initialized = true
 
 	return authenticator, nil
@@ -200,43 +254,57 @@ func NewZitadelAuthenticator(
 // createVerifier creates the appropriate token verifier based on the configured
 // verification method. This is an internal method that handles the complexity
 // of setting up different verification strategies.
-func (a *ZitadelAuthenticator) createVerifier(ctx context.Context) (*oauth.JWTVerification, error) {
+func (a *ZitadelAuthenticator) createJWTVerifiers(ctx context.Context) ([]*oauth.JWTVerification, error) {
 	switch a.verificationMethod {
 	case IntrospectionVerification:
-		if a.serviceAccountKey == nil {
-			return nil, fmt.Errorf("service account key required for introspection verification")
-		}
-		initializer := oauth.DefaultAuthorization(a.serviceAccountKey.KeyFilePath)
-		verifier, err := initializer(ctx, a.zitadelInstance)
-		if err != nil {
-			return nil, err
-		}
-		_, ok := verifier.(*oauth.IntrospectionVerification[*oauth.IntrospectionContext])
-		if !ok {
-			return nil, fmt.Errorf("failed to cast to introspection verifier")
-		}
-		return &oauth.JWTVerification{}, nil
+		return nil, fmt.Errorf("introspection verification not wired")
 
 	case IntrospectionWithCache:
-		if a.serviceAccountKey == nil {
-			return nil, fmt.Errorf("service account key required for introspection with cache")
-		}
-		return &oauth.JWTVerification{}, nil
+		return nil, fmt.Errorf("introspection with cache not wired")
 
 	case JWTVerification:
 		fallthrough
 	default:
-		initializer := oauth.DefaultJWTAuthorization(a.clientID)
-		verifier, err := initializer(ctx, a.zitadelInstance)
-		if err != nil {
-			return nil, err
+		audiences := a.audiences
+		if len(audiences) == 0 {
+			audiences = []string{a.clientID}
 		}
-		jwtVerifier, ok := verifier.(*oauth.JWTVerification)
-		if !ok {
-			return nil, fmt.Errorf("failed to cast to JWT verifier")
+
+		verifiers := make([]*oauth.JWTVerification, 0, len(audiences))
+		for _, aud := range audiences {
+			initializer := oauth.DefaultJWTAuthorization(aud)
+			verifier, err := initializer(ctx, a.zitadelInstance)
+			if err != nil {
+				return nil, err
+			}
+			jwtVerifier, ok := verifier.(*oauth.JWTVerification)
+			if !ok {
+				return nil, fmt.Errorf("failed to cast to JWT verifier")
+			}
+			verifiers = append(verifiers, jwtVerifier)
 		}
-		return jwtVerifier, nil
+		return verifiers, nil
 	}
+}
+
+func (a *ZitadelAuthenticator) checkAuthorization(ctx context.Context, token string) (*oauth.IntrospectionContext, error) {
+	if len(a.jwtVerifiers) == 0 {
+		return nil, fmt.Errorf("authenticator not initialized")
+	}
+
+	var lastErr error
+	for _, verifier := range a.jwtVerifiers {
+		authCtx, err := verifier.CheckAuthorization(ctx, token)
+		if err == nil {
+			return authCtx, nil
+		}
+		lastErr = err
+	}
+
+	if lastErr == nil {
+		lastErr = oauth.ErrInvalidToken
+	}
+	return nil, lastErr
 }
 
 // Middleware returns an HTTP middleware that validates JWT tokens on incoming requests.
@@ -275,7 +343,7 @@ func (a *ZitadelAuthenticator) Middleware(next http.Handler) http.Handler {
 		tokenString := parts[1]
 
 		ctx := r.Context()
-		authCtx, err := a.verifier.CheckAuthorization(ctx, tokenString)
+		authCtx, err := a.checkAuthorization(ctx, tokenString)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("token validation failed: %v", err), http.StatusUnauthorized)
 			return
@@ -317,7 +385,7 @@ func (a *ZitadelAuthenticator) Interceptor() connect.UnaryInterceptorFunc {
 
 			tokenString := parts[1]
 
-			authCtx, err := a.verifier.CheckAuthorization(ctx, tokenString)
+			authCtx, err := a.checkAuthorization(ctx, tokenString)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("token validation failed: %w", err))
 			}
@@ -353,6 +421,13 @@ func (a *ZitadelAuthenticator) extractUserContext(authCtx *oauth.IntrospectionCo
 	if authCtx != nil {
 		userCtx.UserID = authCtx.UserID()
 		userCtx.OrganizationID = authCtx.OrganizationID()
+		userCtx.Email = authCtx.Email
+		if authCtx.PreferredUsername != "" {
+			userCtx.Username = authCtx.PreferredUsername
+		} else if authCtx.Username != "" {
+			userCtx.Username = authCtx.Username
+		}
+		userCtx.Roles = extractRolesFromClaims(authCtx.Claims)
 	}
 
 	return userCtx
@@ -362,7 +437,7 @@ func (a *ZitadelAuthenticator) extractUserContext(authCtx *oauth.IntrospectionCo
 // This method can be used for programmatic token validation outside of
 // the HTTP middleware or interceptor.
 func (a *ZitadelAuthenticator) CheckAuthorization(ctx context.Context, token string) (UserContext, error) {
-	authCtx, err := a.verifier.CheckAuthorization(ctx, token)
+	authCtx, err := a.checkAuthorization(ctx, token)
 	if err != nil {
 		return UserContext{}, fmt.Errorf("token validation failed: %w", err)
 	}
@@ -440,19 +515,111 @@ func (a *ZitadelAuthenticator) IsInitialized() bool {
 }
 
 // AuthMiddleware returns the authentication middleware and ConnectRPC interceptors.
-// If authentication initialization fails, it returns nil middleware and empty interceptors
-// to allow the server to start for development purposes.
+// If authentication initialization fails, it returns a middleware that blocks all requests.
+// This ensures the server does not run in an insecure state.
 //
 // The middleware validates JWT tokens from the Authorization header and injects
 // user context into the request for downstream handlers.
 func AuthMiddleware(cfg AuthConfig) (func(http.Handler) http.Handler, connect.Option) {
-	authenticator, err := NewZitadelAuthenticator(context.Background(), cfg.ZitadelDomain)
+	options := []ZitadelAuthenticatorOption{}
+	if len(cfg.Audiences) > 0 {
+		options = append(options, WithAudiences(cfg.Audiences...))
+	}
+	authenticator, err := NewZitadelAuthenticator(context.Background(), cfg.ZitadelDomain, options...)
 	if err != nil {
-		return nil, connect.WithInterceptors()
+		log.Error().Err(err).Msg("failed to initialize Zitadel authenticator, running with auth disabled (INSECURE)")
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if isPublicEndpoint(r.URL.Path) {
+					next.ServeHTTP(w, r)
+					return
+				}
+				http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
+			})
+		}, connect.WithInterceptors()
 	}
 
 	middleware := authenticator.Middleware
 	interceptors := connect.WithInterceptors(authenticator.Interceptor())
 
 	return middleware, interceptors
+}
+
+func AuthInterceptor(cfg AuthConfig) (func(http.Handler) http.Handler, connect.Option) {
+	return AuthMiddleware(cfg)
+}
+
+func splitCSV(v string) []string {
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func extractRolesFromClaims(claims map[string]any) []string {
+	if len(claims) == 0 {
+		return nil
+	}
+
+	roleKeys := []string{
+		"urn:zitadel:iam:org:project:roles",
+		"urn:zitadel:iam:org:projects:roles",
+		"urn:iam:org:project:roles",
+		"roles",
+	}
+
+	set := map[string]struct{}{}
+	for _, key := range roleKeys {
+		val, ok := claims[key]
+		if !ok || val == nil {
+			continue
+		}
+		switch t := val.(type) {
+		case map[string]any:
+			for k := range t {
+				if k == "" {
+					continue
+				}
+				set[k] = struct{}{}
+			}
+		case []any:
+			for _, item := range t {
+				if s, ok := item.(string); ok {
+					s = strings.TrimSpace(s)
+					if s != "" {
+						set[s] = struct{}{}
+					}
+				}
+			}
+		case []string:
+			for _, s := range t {
+				s = strings.TrimSpace(s)
+				if s != "" {
+					set[s] = struct{}{}
+				}
+			}
+		case string:
+			s := strings.TrimSpace(t)
+			if s != "" {
+				set[s] = struct{}{}
+			}
+		}
+	}
+
+	if len(set) == 0 {
+		return nil
+	}
+
+	roles := make([]string, 0, len(set))
+	for r := range set {
+		roles = append(roles, r)
+	}
+	slices.Sort(roles)
+	return roles
 }

@@ -1,21 +1,29 @@
 import { NextResponse } from "next/server";
 
 const ZITADEL_API = process.env.ZITADEL_ISSUER || "http://localhost:8080";
-// For robustness, we should use the environment variable, but we'll fall back to the verified one
-// if the environment one is missing or clearly invalid (e.g. wrong length)
-const FALLBACK_PAT = "yp4qrCuqP8rMPvk_neDnTA3so-l1I58pzLNfCLLidMi0WM048eGJZqfLz03VjU1y48ZOrXg";
-let ZITADEL_PAT = process.env.ZITADEL_PAT?.trim() || FALLBACK_PAT;
 
-// Defensive check: if the ENV token is the known invalid one (starts with ZaUt), use fallback
-if (ZITADEL_PAT.startsWith("ZaUt")) {
-  console.log("[PROXY] Known invalid PAT detected in environment, using verified fallback");
-  ZITADEL_PAT = FALLBACK_PAT;
+function getZitadelPAT(): string {
+  const pat = process.env.ZITADEL_PAT?.trim();
+  if (!pat) {
+    throw new Error("ZITADEL_PAT environment variable is not set. Authentication proxy unavailable.");
+  }
+  if (pat.startsWith("ZaUt")) {
+    throw new Error("ZITADEL_PAT is invalid or expired. Please provide a valid Personal Access Token.");
+  }
+  return pat;
 }
 
 export async function POST(req: Request) {
-  // Log which PAT source we're using (masked for security)
-  const isFallback = ZITADEL_PAT === FALLBACK_PAT;
-  console.log(`[PROXY] Using ZITADEL_PAT from ${isFallback ? "FALLBACK" : "ENV"} (starts with: ${ZITADEL_PAT.substring(0, 4)}...)`);
+  let ZITADEL_PAT: string;
+  try {
+    ZITADEL_PAT = getZitadelPAT();
+  } catch (err: any) {
+    console.error("[PROXY] Configuration error:", err.message);
+    return NextResponse.json(
+      { error: "Authentication service misconfigured", code: "CONFIG_ERROR" },
+      { status: 503 }
+    );
+  }
 
   try {
     const body = await req.json();
