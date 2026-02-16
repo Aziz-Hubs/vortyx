@@ -273,6 +273,7 @@ vortyx/
 
 ## 8. Environment & Configuration
 -   **Secrets**: Stored in `.env` (not committed).
+-   **Single Source of Truth**: Vortyx uses a single `.env` file at the workspace root. The frontend automatically syncs relevant variables to `frontend/.env.local` via `frontend/scripts/sync-env.js` when running `npm run dev` or `npm run build`.
 -   **Ports**:
     -   Frontend: `3000`
     -   Backend: `8081`
@@ -283,6 +284,32 @@ vortyx/
 -   **No Magic**: If you add a library, document it.
 -   **Port Conflicts**: Backend runs on `8081` to avoid conflict with Zitadel on `8080`.
 -   **Auth**: All API requests require a valid OIDC Bearer token (handled by `auth` middleware).
+
+### Zitadel Authentication
+Vortyx uses Zitadel for identity management with the following auth flows:
+
+| Component | Auth Method | Purpose |
+|-----------|-------------|---------|
+| **Frontend** | OIDC (Authorization Code Flow) | User login via Zitadel |
+| **Backend API** | JWT Bearer Grant | Backend → Zitadel API calls |
+| **VORT Agent** | JWT Profile Grant | Edge agents → Backend auth |
+| **Org Management** | PAT | Only for create/delete orgs |
+
+#### Environment Variables
+| Variable | Description |
+|----------|-------------|
+| `ZITADEL_DOMAIN` | Zitadel gRPC/API address |
+| `ZITADEL_ISSUER` | Zitadel OIDC issuer URL |
+| `ZITADEL_PROJECT_ID` | Project ID (used for audiences) |
+| `ZITADEL_CLIENT_ID` | Frontend OIDC client ID |
+| `ZITADEL_CLIENT_SECRET` | Frontend OIDC client secret |
+| `ZITADEL_BACKEND_API_KEY` | Backend app key path (JWT Bearer) |
+| `ZITADEL_BACKEND_API_ID` | Backend app key ID |
+| `ZITADEL_MANAGEMENT_PAT` | IAM Owner PAT (org management only) |
+| `ZITADEL_VORT_SERVICE_USER_KEY_PATH` | Agent service user key path (JWT Profile) |
+| `ZITADEL_VORT_SERVICE_USER_KEY_ID` | Agent service user key ID |
+
+> **Note**: Never commit `.env` to version control. Use `.env.example` as a template.
 
 ## 10. Intelligent Documentation Synchronization (AI AGENT PROTOCOL)
 

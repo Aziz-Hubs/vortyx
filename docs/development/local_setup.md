@@ -63,6 +63,8 @@ npm install
 npm run dev
 ```
 
+> **Note**: The first `npm run dev` will automatically sync environment variables from the root `.env` to `frontend/.env.local`. You only need to maintain the root `.env` file.
+
 The frontend should be running at `http://localhost:3000`.
 
 ## 5. Verification

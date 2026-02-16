@@ -220,9 +220,9 @@ backend/internal/vort/
 
 | Variable | Description |
 |----------|-------------|
-| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key for Zitadel auth |
-| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header |
-| `VORT_AGENT_JWT_PRIVATE_KEY` | Private key for internal tokens (optional) |
+| `ZITADEL_VORT_SERVICE_USER_KEY_PATH` | Path to RSA private key for Zitadel auth |
+| `ZITADEL_VORT_SERVICE_USER_KEY_ID` | Key ID for JWT header |
+| `ZITADEL_VORT_AGENT_JWT_PRIVATE_KEY` | Private key for internal tokens (optional) |
 
 ---
 
@@ -268,7 +268,7 @@ func NewRouter() http.Handler {
 | `ZITADEL_DOMAIN` | Zitadel instance domain | `localhost:8080` |
 | `ZITADEL_ISSUER` | Zitadel OIDC issuer URL | `http://localhost:8080` |
 | `ZITADEL_CLIENT_ID` | Zitadel client ID | - |
-| `ZITADEL_PAT` | Zitadel Personal Access Token | - |
+| `ZITADEL_MANAGEMENT_PAT` | Zitadel Management PAT (IAM OWNER) | - |
 
 ---
 

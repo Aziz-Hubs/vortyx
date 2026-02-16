@@ -6,22 +6,22 @@
 //
 // Authentication Flow:
 //
-//	1. Agent sends its agent key and secret to backend /authenticate endpoint
-//	   (This validates the agent's credentials in our database)
+//  1. Agent sends its agent key and secret to backend /authenticate endpoint
+//     (This validates the agent's credentials in our database)
 //
-//	2. Backend creates a JWT assertion signed with the machine user's private key
-//	   - Issuer: Zitadel service account ID
-//	   - Subject: Zitadel service account ID
-//	   - Audience: Zitadel token endpoint
-//	   - Expiry: 5 minutes (short-lived for security)
+//  2. Backend creates a JWT assertion signed with the machine user's private key
+//     - Issuer: Zitadel service account ID
+//     - Subject: Zitadel service account ID
+//     - Audience: Zitadel token endpoint
+//     - Expiry: 5 minutes (short-lived for security)
 //
-//	3. Backend exchanges the JWT assertion for an access token
-//	   POST /oauth/v2/token
-//	   grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
-//	   assertion=<jwt_assertion>
+//  3. Backend exchanges the JWT assertion for an access token
+//     POST /oauth/v2/token
+//     grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
+//     assertion=<jwt_assertion>
 //
-//	4. Backend returns the access token to the agent
-//	   The agent then uses this token for subsequent API calls
+//  4. Backend returns the access token to the agent
+//     The agent then uses this token for subsequent API calls
 //
 // Security Considerations:
 //
@@ -221,7 +221,7 @@ func (a *MachineUserAuth) createJWTToken() (string, error) {
 	// See RFC 7523 for specification details
 	claims := jwt.RegisteredClaims{
 		Issuer:    a.issuer,
-		Subject:   a.audience,
+		Subject:   a.issuer,
 		Audience:  jwt.ClaimStrings{a.audience},
 		ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
 		IssuedAt:  jwt.NewNumericDate(now),

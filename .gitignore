@@ -8,9 +8,10 @@ vendor/
 # Go workspace
 go.work
 
-# Environment variables
+# Environment variables (keep .env.example as template)
 .env
-.env*
+.env.local
+!.env.example
 
 # IDEs
 .vscode/

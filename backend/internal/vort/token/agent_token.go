@@ -72,6 +72,8 @@ type AgentTokenService struct {
 //
 // Environment Variables:
 //   - VORT_AGENT_JWT_PRIVATE_KEY: Base64-encoded RSA private key
+//   - ZITADEL_VORT_AGENT_JWT_ISSUER: JWT issuer (default: vortyx-agent-auth)
+//   - ZITADEL_AGENT_JWT_AUDIENCE: JWT audience (default: vortyx-api)
 //
 // Returns an error if key parsing fails.
 func NewAgentTokenService() (*AgentTokenService, error) {
@@ -101,8 +103,8 @@ func NewAgentTokenService() (*AgentTokenService, error) {
 	return &AgentTokenService{
 		privateKey: privateKey,
 		publicKey:  &privateKey.PublicKey,
-		issuer:     os.Getenv("VORT_AGENT_JWT_ISSUER"),
-		audience:   os.Getenv("VORT_AGENT_JWT_AUDIENCE"),
+		issuer:     os.Getenv("ZITADEL_VORT_AGENT_JWT_ISSUER"),
+		audience:   os.Getenv("ZITADEL_AGENT_JWT_AUDIENCE"),
 	}, nil
 }
 

@@ -174,19 +174,7 @@ func DefaultAuthConfig() AuthConfig {
 		domain = "localhost:8080"
 	}
 
-	audiences := splitCSV(os.Getenv("ZITADEL_AUDIENCES"))
-	if len(audiences) == 0 {
-		single := strings.TrimSpace(os.Getenv("ZITADEL_AUDIENCE"))
-		if single != "" {
-			audiences = []string{single}
-		}
-	}
-	if len(audiences) == 0 {
-		projectID := strings.TrimSpace(os.Getenv("ZITADEL_API_PROJECT_ID"))
-		if projectID != "" {
-			audiences = []string{projectID}
-		}
-	}
+	audiences := splitCSV(os.Getenv("ZITADEL_PROJECT_ID"))
 	if len(audiences) == 0 {
 		clientID := strings.TrimSpace(os.Getenv("ZITADEL_CLIENT_ID"))
 		if clientID != "" {

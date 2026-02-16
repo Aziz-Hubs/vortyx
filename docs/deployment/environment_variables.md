@@ -4,9 +4,26 @@ This document lists all environment variables required to run the Vortyx platfor
 
 > **WARNING**: Never commit actual secrets to version control. Use `.env` for local development and GitHub Secrets for CI/CD.
 
-## 1. Local Development (`.env`)
+## 1. Local Development
 
-These variables are used when running `task dev` or `docker-compose up`.
+### Single Source of Truth: Root `.env`
+
+Vortyx uses a **single `.env` file at the workspace root** that contains all configuration for both backend and frontend. The frontend automatically syncs relevant variables to `frontend/.env.local` when running `npm run dev` or `npm run build`.
+
+```
+VORTYX_ROOT/
+├── .env                    # ← Single source of truth (contains ALL secrets)
+├── .env.example            # ← Template for team members (safe to commit)
+├── frontend/
+│   └── .env.local          # ← Auto-generated (do not edit manually)
+└── backend/
+```
+
+#### Setup for New Developers
+
+1. Copy `.env.example` to `.env`
+2. Fill in the values (see sections below)
+3. Run `npm run dev` (frontend) or `task dev` (full stack)
 
 ### Backend Service
 | Variable | Description | Default / Example |
@@ -15,33 +32,36 @@ These variables are used when running `task dev` or `docker-compose up`.
 | `DATABASE_URL` | PostgreSQL connection string. | `postgres://postgres:password@localhost:5432/vortyx?sslmode=disable` |
 | `ZITADEL_DOMAIN` | Zitadel gRPC/API address (host:port). | `localhost:8080` |
 | `ZITADEL_ISSUER` | Zitadel OIDC issuer URL. | `http://localhost:8080` |
-| `ZITADEL_AUDIENCES` | Comma-separated accepted `aud` values for JWT access tokens. | `3600801544557033557,360224206048264197` |
-| `ZITADEL_API_PROJECT_ID` | Zitadel Project Resource ID for Vortyx Platform. | `3600801544557033557` |
+| `ZITADEL_PROJECT_ID` | Zitadel Project Resource ID for Vortyx Platform. | `360080154455703557` |
 | `ZITADEL_INSECURE` | Use insecure connections to Zitadel (local dev only). | `true` |
 | `ZITADEL_INSECURE_PORT` | Insecure port when `ZITADEL_INSECURE=true`. | `8080` |
-| `ZITADEL_PAT` | Personal Access Token for Management API (optional). | `(secret)` |
-| `ZITADEL_SERVICE_USER_KEY_PATH` | Service-user key file path for Management API (optional). | `./json secrets/<file>.json` |
+| `ZITADEL_MANAGEMENT_PAT` | Personal Access Token for Management API (IAM OWNER). | `(secret)` |
+| `ZITADEL_BACKEND_API_KEY` | Path to backend API app key file (JWT Bearer Grant). | `./json secrets/vort-api-key.json` |
+| `ZITADEL_BACKEND_API_ID` | Key ID for backend API app. | `360299659698110469` |
 | `LOG_LEVEL` | Logging verbosity. | `debug` |
 
 ### VORT Agent Authentication
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
-| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key for JWT Profile Grant (optional). | `./json secrets/vort-agent-secret.json` |
-| `VORT_MACHINE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH). | `(base64 string)` |
-| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header (required with machine user auth). | `360225578390913029` |
-| `VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing. | Auto-generated if not provided |
-| `VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens. | `vortyx-agent-auth` |
-| `VORT_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens. | `vortyx-api` |
+| `ZITADEL_VORT_SERVICE_USER_KEY_PATH` | Path to service user key for JWT Profile Grant (optional). | `./json secrets/vort-agent-key.json` |
+| `ZITADEL_VORT_SERVICE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH). | `(base64 string)` |
+| `ZITADEL_VORT_SERVICE_USER_KEY_ID` | Key ID for JWT header (required with service user auth). | `360225578390913029` |
+| `ZITADEL_VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing. | Auto-generated if not provided |
+| `ZITADEL_VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens. | `vortyx-agent-auth` |
+| `ZITADEL_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens. | `vortyx-api` |
 | `ENV` | Environment mode (affects pprof availability). | `development` (use `production` to disable pprof) |
 
 ### Frontend Application
+
+> **Note**: The frontend variables below are automatically synced from the root `.env` file via `frontend/scripts/sync-env.js`. Do not edit `frontend/.env.local` manually - it is regenerated on every `npm run dev` or `npm run build`.
+
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | `NEXT_PUBLIC_API_URL` | Base URL for the Backend API (browser). | `http://localhost:8081` |
 | `ZITADEL_ISSUER` | Zitadel OIDC issuer URL (NextAuth server-side). | `http://localhost:8080` |
 | `ZITADEL_CLIENT_ID` | Zitadel OIDC client ID for `vortyx-frontend`. | `360224206048264197` |
 | `ZITADEL_CLIENT_SECRET` | Zitadel OIDC client secret for `vortyx-frontend`. | `(secret)` |
-| `ZITADEL_API_PROJECT_ID` | Adds API audience to access tokens via reserved scope. | `3600801544557033557` |
+| `ZITADEL_PROJECT_ID` | Project ID for token audience. | `360080154455703557` |
 | `ZITADEL_ENABLE_PASSWORD_GRANT` | Enables legacy password grant login (not recommended). | `false` |
 | `NEXTAUTH_URL` | Public base URL of the frontend. | `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | NextAuth secret. | `(secret)` |

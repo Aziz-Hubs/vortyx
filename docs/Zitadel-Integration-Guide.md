@@ -596,29 +596,29 @@ resp, err := client.Do(req)
 | `ZITADEL_ISSUER` | Zitadel OIDC issuer URL | Yes |
 | `ZITADEL_CLIENT_ID` | OIDC client ID for `vortyx-frontend` | Yes |
 | `ZITADEL_CLIENT_SECRET` | OIDC client secret for `vortyx-frontend` | Yes |
-| `ZITADEL_API_PROJECT_ID` | Vortyx Platform project resource ID (reserved `aud` scope + grants) | Recommended |
-| `ZITADEL_AUDIENCES` | Comma-separated accepted `aud` values for backend token validation | Recommended |
+| `ZITADEL_PROJECT_ID` | Vortyx Platform project resource ID (reserved `aud` scope + grants) | Recommended |
 | `ZITADEL_INSECURE` | Use insecure connections to Zitadel (local dev only) | Dev only |
-| `ZITADEL_PAT` | PAT for Management API (used by PlatformService) | Optional |
-| `ZITADEL_SERVICE_USER_KEY_PATH` | Service-user key file path for Management API | Optional |
+| `ZITADEL_MANAGEMENT_PAT` | PAT for Management API (used by PlatformService) | Optional |
+| `ZITADEL_BACKEND_API_KEY` | Backend API app key file path for JWT Bearer Grant | Optional |
+| `ZITADEL_BACKEND_API_ID` | Backend API app key ID | Optional |
 
 ### VORT Agent Machine User Authentication
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key file for JWT Profile Grant | No* |
-| `VORT_MACHINE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH) | No* |
-| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header (required when using machine user auth) | No* |
+| `ZITADEL_VORT_SERVICE_USER_KEY_PATH` | Path to RSA private key file for JWT Profile Grant | No* |
+| `ZITADEL_VORT_SERVICE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH) | No* |
+| `ZITADEL_VORT_SERVICE_USER_KEY_ID` | Key ID for JWT header (required when using machine user auth) | No* |
 
-*Either `VORT_MACHINE_USER_KEY_PATH` or `VORT_MACHINE_USER_KEY` is required for Zitadel machine user auth. `VORT_MACHINE_USER_KEY_ID` is required when providing a private key. If not configured, the system falls back to internal token generation.
+*Either `ZITADEL_VORT_SERVICE_USER_KEY_PATH` or `ZITADEL_VORT_SERVICE_USER_KEY` is required for Zitadel machine user auth. `ZITADEL_VORT_SERVICE_USER_KEY_ID` is required when providing a private key. If not configured, the system falls back to internal token generation.
 
 ### Internal Agent Token Service
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing | Auto-generated |
-| `VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens | `vortyx-agent-auth` |
-| `VORT_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens | `vortyx-api` |
+| `ZITADEL_VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing | Auto-generated |
+| `ZITADEL_VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens | `vortyx-agent-auth` |
+| `ZITADEL_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens | `vortyx-api` |
 
 ## Appendix: API Endpoints
 

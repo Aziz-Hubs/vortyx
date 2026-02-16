@@ -129,10 +129,7 @@ func NewRouter(dbPool *pgxpool.Pool) http.Handler {
 	// Health Check
 	r.Get("/health", health.NewHandler(dbPool))
 
-	projectID := os.Getenv("ZITADEL_API_PROJECT_ID")
-	if projectID == "" {
-		projectID = os.Getenv("ZITADEL_PLATFORM_PROJECT_ID")
-	}
+	projectID := os.Getenv("ZITADEL_PROJECT_ID")
 
 	zitadelMgmtClient, err := NewZitadelManagementClient(context.Background())
 	if err != nil {

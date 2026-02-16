@@ -287,8 +287,8 @@ func (s *AgentService) RegisterAgent(ctx context.Context, req *connect.Request[v
 // 4. Return the Zitadel JWT token for subsequent API calls
 //
 // The machine user authentication uses:
-// - VORT_MACHINE_USER_KEY_PATH or VORT_MACHINE_USER_KEY: RSA private key for JWT signing
-// - VORT_MACHINE_USER_KEY_ID: Key ID for the JWT header
+// - ZITADEL_VORT_SERVICE_USER_KEY_PATH or ZITADEL_VORT_SERVICE_USER_KEY: RSA private key for JWT signing
+// - ZITADEL_VORT_SERVICE_USER_KEY_ID: Key ID for the JWT header
 // - ZITADEL_ISSUER: Zitadel instance URL
 func (s *AgentService) AuthenticateAgent(ctx context.Context, req *connect.Request[vortv1.AuthenticateAgentRequest]) (*connect.Response[vortv1.AuthenticateAgentResponse], error) {
 	msg := req.Msg
