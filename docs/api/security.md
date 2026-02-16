@@ -185,6 +185,44 @@ The Zitadel SDK middleware provides:
 - **Audience Validation**: Ensures token was issued for the correct audience
 - **Issuer Validation**: Verifies token was issued by trusted Zitadel instance
 - **Claims Extraction**: Extracts user ID, email, organization, and roles from token
+- **Fail-Closed Security**: Returns 503 if authentication fails (not fail-open)
+
+---
+
+## VORT Agent Authentication
+
+The VORT agent system has additional authentication components:
+
+```
+backend/internal/vort/
+├── machineuser/
+│   └── auth.go          # Zitadel JWT Profile Grant authentication
+├── token/
+│   └── agent_token.go  # Internal JWT token service
+└── service/
+    └── service.go      # Agent service with bcrypt credential hashing
+```
+
+### Authentication Flow
+
+1. **RegisterAgent** (Public): Agent registers and receives encrypted credentials
+2. **AuthenticateAgent** (Public): Agent validates credentials, receives JWT token
+3. **Protected Endpoints**: Require valid JWT (Zitadel or internal)
+
+### Security Features
+
+- **bcrypt Hashing**: Agent secrets stored with bcrypt (cost factor 10)
+- **JWT Profile Grant**: Zitadel machine user authentication supported
+- **Internal Token Fallback**: Automatic fallback if Zitadel unavailable
+- **Token Expiry**: 24-hour token validity
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key for Zitadel auth |
+| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header |
+| `VORT_AGENT_JWT_PRIVATE_KEY` | Private key for internal tokens (optional) |
 
 ---
 
@@ -201,15 +239,9 @@ func NewRouter() http.Handler {
         zitadelDomain = "localhost:8080"
     }
 
-    authenticator, err := auth.NewZitadelAuthenticator(context.Background(), zitadelDomain)
-    var interceptors connect.Option
-    if err != nil {
-        log.Printf("Warning: Failed to initialize authenticator: %v", err)
-        interceptors = connect.WithInterceptors()
-    } else {
-        r.Use(authenticator.Middleware)
-        interceptors = connect.WithInterceptors(authenticator.Interceptor())
-    }
+    authMw, connectOpts := interceptors.AuthMiddleware(interceptors.DefaultAuthConfig())
+    r.Use(authMw)
+    _ = connectOpts
 
     r.Use(middleware.Logger)
     r.Use(middleware.Recoverer)
@@ -226,6 +258,8 @@ func NewRouter() http.Handler {
     return r
 }
 ```
+
+> **Note**: If Zitadel authentication fails to initialize, the middleware enters fail-closed mode and returns 503 for all non-public endpoints. This prevents unauthorized access when the identity provider is unavailable.
 
 ### Environment Variables
 
@@ -249,6 +283,8 @@ func NewRouter() http.Handler {
 3. **CORS**: Configure appropriate allowed origins for your production frontend domain.
 
 4. **Token Validation**: Use JWT verification (default) for high-performance APIs. Use introspection if you need to check token revocation.
+
+5. **pprof Protection**: Profiling endpoints (`/debug/pprof/*`) are automatically disabled when `ENV=production`. Never expose pprof in production.
 
 ### Performance
 
@@ -287,3 +323,6 @@ The auth middleware uses the following packages:
 - `github.com/go-chi/chi/v5` - HTTP routing
 - `github.com/go-chi/cors` - CORS handling
 - `connectrpc.com/connect` - ConnectRPC for gRPC-style APIs
+- `github.com/golang-jwt/jwt/v5` - JWT token handling
+- `golang.org/x/crypto/bcrypt` - Secure password hashing
+- `github.com/rs/zerolog` - Structured logging

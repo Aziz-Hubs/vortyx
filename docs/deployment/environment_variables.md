@@ -23,6 +23,17 @@ These variables are used when running `task dev` or `docker-compose up`.
 | `ZITADEL_SERVICE_USER_KEY_PATH` | Service-user key file path for Management API (optional). | `./json secrets/<file>.json` |
 | `LOG_LEVEL` | Logging verbosity. | `debug` |
 
+### VORT Agent Authentication
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key for JWT Profile Grant (optional). | `./json secrets/vort-agent-secret.json` |
+| `VORT_MACHINE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH). | `(base64 string)` |
+| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header (required with machine user auth). | `360225578390913029` |
+| `VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing. | Auto-generated if not provided |
+| `VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens. | `vortyx-agent-auth` |
+| `VORT_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens. | `vortyx-api` |
+| `ENV` | Environment mode (affects pprof availability). | `development` (use `production` to disable pprof) |
+
 ### Frontend Application
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |

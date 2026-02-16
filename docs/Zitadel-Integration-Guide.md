@@ -206,63 +206,65 @@ var publicEndpoints = map[string]bool{
 | OIDC Authentication | ✅ Implemented | Standard OIDC code flow with PKCE |
 | JWT Token Validation | ✅ Implemented | Local JWT verification using JWKS |
 | Multi-Tenancy | ✅ Implemented | Organization-based isolation |
-| Role Extraction | ⚠️ Partial | Roles not fully extracted from tokens |
+| Role Extraction | ✅ Implemented | Roles extracted from `urn:zitadel:iam:org:project:roles` claim |
 | MFA | 🔲 Not Used | Not yet enabled in Vortyx |
 | Passkeys | 🔲 Not Used | Not yet enabled in Vortyx |
+
+### Frontend Security
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Route Protection | ✅ Implemented | Middleware enforces authentication |
+| Session Cookie Security | ✅ Implemented | NextAuth session cookies |
+| XSS Protection | ✅ Implemented | Error messages sanitized |
+| Hardcoded Secrets | ✅ Fixed | PAT removed, requires env var |
 
 ### Machine Users (Service Accounts)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Machine Users | 🔲 Planned | Not yet implemented |
-| JWT Profile Grant | 🔲 Planned | Not yet implemented |
-| Service User Keys | 🔲 Planned | Not yet implemented |
+| Machine Users | ✅ Implemented | Each VORT agent can authenticate via Zitadel machine user |
+| JWT Profile Grant | ✅ Implemented | JWT Profile Grant (`urn:ietf:params:oauth:grant-type:jwt-bearer`) |
+| Service User Keys | ✅ Implemented | RSA key-based authentication |
+| Agent Token Service | ✅ Implemented | Internal token fallback if Zitadel unavailable |
+| bcrypt Credential Hashing | ✅ Implemented | Agent secrets stored with bcrypt (not SHA256) |
 
 ---
 
-## 5. Future Considerations
+## 5. Implemented Features
 
-### Phase 1: Machine User Integration
+### Phase 1: Machine User Integration (COMPLETED)
 
-1. **Create Machine Users in Zitadel**
-   - Each VORT agent gets a machine user
-   - Machine user linked to organization
+1. **Machine User Authentication**
+   - VORT agents authenticate using Zitadel JWT Profile Grant
+   - Located in: `backend/internal/vort/machineuser/auth.go`
 
-2. **JWT Profile Grant**
-   - Agents use private key to request tokens
-   - No client secret exposure
+2. **Agent Token Service**
+   - Internal token generation as fallback if Zitadel unavailable
+   - Located in: `backend/internal/vort/token/agent_token.go`
+   - Uses RS256 signed JWTs with configurable expiry
 
-3. **Token Management**
-   - Automatic token refresh
-   - Secure key storage
+3. **Secure Credential Storage**
+   - Agent secrets hashed with bcrypt (cost factor 10)
+   - Located in: `backend/internal/vort/service/service.go`
 
-### Phase 2: Enhanced Security
+4. **Authentication Flow**
+   - RegisterAgent: Public endpoint for initial agent registration
+   - AuthenticateAgent: Validates credentials + issues JWT token
+   - Heartbeat/Data endpoints: Require valid JWT (Zitadel or internal)
 
-1. **MFA Enforcement**
-   - Require MFA for admin accounts
-   - Optional for regular users
+### Phase 2: Enhanced Security (IN PROGRESS)
 
-2. **Passkeys**
-   - Passwordless authentication
-   - Hardware key support
+1. **Fail-Open Authentication Fixed**
+   - Backend now returns 503 if Zitadel unavailable
+   - Non-public endpoints blocked when auth fails
 
-3. **Brute Force Protection**
-   - Account lockout after failed attempts
-   - CAPTCHA integration
+2. **Frontend Route Protection**
+   - Middleware at `frontend/src/middleware.ts`
+   - Redirects unauthenticated users to login
 
-### Phase 3: Enterprise Features
-
-1. **SAML Integration**
-   - Enterprise SSO support
-   - Okta, Azure AD integration
-
-2. **Custom Domains**
-   - White-label login pages
-   - Custom branding
-
-3. **Audit Enhancements**
-   - Detailed action logging
-   - Compliance reports
+3. **Production pprof Protection**
+   - Profiling endpoints only enabled in non-production environments
 
 ---
 
@@ -586,6 +588,8 @@ resp, err := client.Do(req)
 
 ## Appendix: Environment Variables
 
+### Core Zitadel Variables
+
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `ZITADEL_DOMAIN` | Zitadel instance domain | Yes |
@@ -597,6 +601,24 @@ resp, err := client.Do(req)
 | `ZITADEL_INSECURE` | Use insecure connections to Zitadel (local dev only) | Dev only |
 | `ZITADEL_PAT` | PAT for Management API (used by PlatformService) | Optional |
 | `ZITADEL_SERVICE_USER_KEY_PATH` | Service-user key file path for Management API | Optional |
+
+### VORT Agent Machine User Authentication
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VORT_MACHINE_USER_KEY_PATH` | Path to RSA private key file for JWT Profile Grant | No* |
+| `VORT_MACHINE_USER_KEY` | Base64-encoded RSA private key (alternative to KEY_PATH) | No* |
+| `VORT_MACHINE_USER_KEY_ID` | Key ID for JWT header (required when using machine user auth) | No* |
+
+*Either `VORT_MACHINE_USER_KEY_PATH` or `VORT_MACHINE_USER_KEY` is required for Zitadel machine user auth. `VORT_MACHINE_USER_KEY_ID` is required when providing a private key. If not configured, the system falls back to internal token generation.
+
+### Internal Agent Token Service
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VORT_AGENT_JWT_PRIVATE_KEY` | Base64-encoded RSA private key for internal token signing | Auto-generated |
+| `VORT_AGENT_JWT_ISSUER` | JWT issuer for internal tokens | `vortyx-agent-auth` |
+| `VORT_AGENT_JWT_AUDIENCE` | JWT audience for internal tokens | `vortyx-api` |
 
 ## Appendix: API Endpoints
 

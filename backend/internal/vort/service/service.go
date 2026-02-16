@@ -34,6 +34,7 @@ import (
 	"github.com/abdul/vortyx/backend/internal/vort/config"
 	"github.com/abdul/vortyx/backend/internal/vort/db"
 	"github.com/abdul/vortyx/backend/internal/vort/encryption"
+	"github.com/abdul/vortyx/backend/internal/vort/machineuser"
 	"github.com/abdul/vortyx/backend/internal/vort/mq"
 	"github.com/abdul/vortyx/backend/internal/vort/token"
 	"github.com/google/uuid"
@@ -61,16 +62,17 @@ import (
 type AgentService struct {
 	vortv1connect.UnimplementedVortServiceHandler // Embed for forward compatibility
 
-	mu          sync.RWMutex
-	queries     db.Querier                // Database interface
-	config      *config.Config            // Configuration
-	encryptor   *encryption.KeyManager    // Encryption key manager
-	tokenSvc    *token.AgentTokenService // JWT token service
-	publisher   mq.Publisher              // Message queue publisher
-	subscribers map[string]mq.Subscriber  // Message subscribers
-	handlers    map[string]CommandHandler // Command handlers
-	shutdownCh  chan struct{}             // Shutdown signal
-	wg          sync.WaitGroup            // Wait group for goroutines
+	mu            sync.RWMutex
+	queries       db.Querier                // Database interface
+	config        *config.Config            // Configuration
+	encryptor     *encryption.KeyManager    // Encryption key manager
+	tokenSvc      *token.AgentTokenService  // JWT token service
+	machineUserAuth *machineuser.MachineUserAuth // Zitadel machine user auth
+	publisher     mq.Publisher              // Message queue publisher
+	subscribers   map[string]mq.Subscriber  // Message subscribers
+	handlers      map[string]CommandHandler // Command handlers
+	shutdownCh    chan struct{}             // Shutdown signal
+	wg            sync.WaitGroup            // Wait group for goroutines
 }
 
 // =============================================================================
@@ -94,19 +96,23 @@ func NewService(
 ) *AgentService {
 	tokenSvc, err := token.GetAgentTokenService()
 	if err != nil {
-		// Log error but continue - token service failure shouldn't block agent registration
-		// The token service will generate a new keypair if needed
-		cfg.Logger.Error().Err(err).Msg("failed to initialize agent token service, using ephemeral keys")
+		cfg.Logger.Error().Err(err).Msg("failed to initialize agent token service")
+	}
+
+	machineUserAuth, err := machineuser.GetMachineUserAuth(context.Background())
+	if err != nil {
+		cfg.Logger.Warn().Err(err).Msg("Zitadel machine user auth not configured - using fallback authentication")
 	}
 
 	svc := &AgentService{
-		queries:     queries,
-		config:      cfg,
-		encryptor:   encryptor,
-		tokenSvc:    tokenSvc,
-		subscribers: make(map[string]mq.Subscriber),
-		handlers:    make(map[string]CommandHandler),
-		shutdownCh:  make(chan struct{}),
+		queries:         queries,
+		config:          cfg,
+		encryptor:       encryptor,
+		tokenSvc:        tokenSvc,
+		machineUserAuth: machineUserAuth,
+		subscribers:     make(map[string]mq.Subscriber),
+		handlers:        make(map[string]CommandHandler),
+		shutdownCh:      make(chan struct{}),
 	}
 
 	// Register default command handlers
@@ -270,18 +276,20 @@ func (s *AgentService) RegisterAgent(ctx context.Context, req *connect.Request[v
 	}), nil
 }
 
-// AuthenticateAgent authenticates an agent using Zitadel.
-// This endpoint validates the agent's credentials and returns a Zitadel JWT token.
+// AuthenticateAgent authenticates an agent using Zitadel Machine User flow.
+// This endpoint validates the agent's credentials and returns a Zitadel JWT token
+// using JWT Profile Grant (urn:ietf:params:oauth:grant-type:jwt-bearer).
 //
 // Authentication Flow:
 // 1. Validate agent key and secret against database
 // 2. Verify agent status is active/pending
-// 3. Return Zitadel JWT token for subsequent API calls
+// 3. If Zitadel machine user auth is configured, use JWT Profile Grant to obtain a Zitadel token
+// 4. Return the Zitadel JWT token for subsequent API calls
 //
-// Note: In production, this should integrate with Zitadel's Machine User flow
-// to generate proper Zitadel tokens. For now, we validate credentials and
-// return a placeholder. The agent would then use Zitadel's token endpoint
-// with its machine user credentials.
+// The machine user authentication uses:
+// - VORT_MACHINE_USER_KEY_PATH or VORT_MACHINE_USER_KEY: RSA private key for JWT signing
+// - VORT_MACHINE_USER_KEY_ID: Key ID for the JWT header
+// - ZITADEL_ISSUER: Zitadel instance URL
 func (s *AgentService) AuthenticateAgent(ctx context.Context, req *connect.Request[vortv1.AuthenticateAgentRequest]) (*connect.Response[vortv1.AuthenticateAgentResponse], error) {
 	msg := req.Msg
 
@@ -298,7 +306,6 @@ func (s *AgentService) AuthenticateAgent(ctx context.Context, req *connect.Reque
 	// 2. Find Agent by Key Hash
 	agent, err := s.queries.GetAgentByKeyHash(ctx, keyHash)
 	if err != nil {
-		// Return generic error to avoid enumeration
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid credentials"))
 	}
 
@@ -311,8 +318,7 @@ func (s *AgentService) AuthenticateAgent(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid credentials"))
 	}
 
-	// 4. Verify Secret
-	// The secret stored in DB is bcrypt hashed.
+	// 4. Verify Secret with bcrypt
 	storedHash := string(secret.EncryptedValue)
 
 	if !checkPassword(storedHash, msg.Secret) {
@@ -324,23 +330,33 @@ func (s *AgentService) AuthenticateAgent(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("agent is %s", agent.Status))
 	}
 
-	// 6. Generate JWT token for the agent
+	// 6. Generate JWT token using Zitadel Machine User flow
 	var jwtToken string
 	var expiresAt time.Time
-	tokenExpiry := 24 * time.Hour // 24 hour token validity
+	tokenExpiry := 24 * time.Hour
 
-	if s.tokenSvc != nil {
+	// Try Zitadel machine user authentication first
+	if s.machineUserAuth != nil {
+		zitadelToken, exp, err := s.machineUserAuth.IssueToken(agent.ID.String())
+		if err != nil {
+			s.config.Logger.Error().Err(err).Str("agent_id", agent.ID.String()).Msg("failed to get Zitadel token, falling back to internal token")
+		} else {
+			jwtToken = zitadelToken
+			expiresAt = exp
+		}
+	}
+
+	// Fallback to internal token service if Zitadel failed or is not configured
+	if jwtToken == "" && s.tokenSvc != nil {
 		generatedToken, err := s.tokenSvc.IssueToken(agent.ID.String(), agent.Name, tokenExpiry)
 		if err != nil {
-			s.config.Logger.Error().Err(err).Str("agent_id", agent.ID.String()).Msg("failed to generate JWT token")
+			s.config.Logger.Error().Err(err).Str("agent_id", agent.ID.String()).Msg("failed to generate fallback JWT token")
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to generate authentication token"))
 		}
 		jwtToken = generatedToken
 		expiresAt = time.Now().Add(tokenExpiry)
-	} else {
-		// Fallback: token service not available
-		jwtToken = ""
-		expiresAt = time.Now().Add(tokenExpiry)
+	} else if jwtToken == "" {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no token service available"))
 	}
 
 	return connect.NewResponse(&vortv1.AuthenticateAgentResponse{
